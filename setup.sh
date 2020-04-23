@@ -9,7 +9,7 @@ select opt in "${options[@]}"; do
         ln -s -f ~/git/dotfiles/screen/.screenrc ~/.screenrc
         ln -s -f ~/git/dotfiles/tmux/.tmux.conf ~/.tmux.conf
         ln -s -f ~/git/dotfiles/jrnl/.jrnl_config ~/.jrnl_config
-        ln -s -f ~/git/dotfiles/bash/.bash_alias ~/.bash_alias
+        ln -s -f ~/git/dotfiles/bash/.bash_aliases ~/.bash_aliases
         # cat ./bash/.bashrc >> ~/.bashrc
         source ~/.bashrc
         break
