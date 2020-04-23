@@ -1,11 +1,10 @@
 # Custom PS1
-export PS1='\[\e[37m\][\[\e[m\]\[\e[34m\]\t\[\e[m\]] \[\e]0;\w\a\]\[\e[32m\]\u@\h \[\e[33m\]\w\[\e[0m\]\n\$ '
+# export PS1='\[\e[37m\][\[\e[m\]\[\e[34m\]\t\[\e[m\]] \[\e]0;\w\a\]\[\e[32m\]\u@\h \[\e[33m\]\w\[\e[0m\]\n\$ '
 
 # ALways vim
 VISUAL=vim
 export VISUAL EDITOR=vim
 export EDITOR
-export TERM="xterm-256color"
 
 if [ $TILIX_ID ] || [ $VTE_VERSION ]; then
     source /etc/profile.d/vte.sh
@@ -21,9 +20,9 @@ alias e_bash='vim ~/.bashrc'
 alias e_cron='crontab -e'
 
 # ls
-alias ls='ls --color=auto'
-alias l='ls -la'
-alias l.='ls -d .* --color=auto'
+# alias ls='ls --color=auto'
+# alias l='ls -la'
+# alias l.='ls -d .* --color=auto'
 
 # general shortcuts
 alias c='clear'
