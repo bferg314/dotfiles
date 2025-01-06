@@ -5,12 +5,30 @@ options=("Create Links" "Install VimPlug" "Install zsh" "Update" "Quit")
 select opt in "${options[@]}"; do
     case $opt in
     "Create Links")
-        ln -s -f ~/git/dotfiles/linux/vim/.vimrc ~/.vimrc
-        ln -s -f ~/git/dotfiles/screen/.screenrc ~/.screenrc
-        ln -s -f ~/git/dotfiles/tmux/.tmux.conf ~/.tmux.conf
-        ln -s -f ~/git/dotfiles/jrnl/.jrnl_config ~/.jrnl_config
-        ln -s -f ~/git/dotfiles/bash/.bash_aliases ~/.bash_aliases
-        # cat ./bash/.bashrc >> ~/.bashrc
+        # Get the directory where this script is located
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+        # Create and link bashrc.d
+        mkdir -p ~/.bashrc.d
+        ln -s -f "$REPO_ROOT/linux/bashrc.d/"* ~/.bashrc.d/
+
+        # Link other dotfiles
+        ln -s -f "$REPO_ROOT/linux/vim/.vimrc" ~/.vimrc
+        ln -s -f "$REPO_ROOT/linux/screen/.screenrc" ~/.screenrc
+        ln -s -f "$REPO_ROOT/linux/tmux/.tmux.conf" ~/.tmux.conf
+
+        # Configure .bashrc to source bashrc.d
+        if ! grep -q "source ~/.bashrc.d/\*" ~/.bashrc; then
+            echo '
+# Source all files from bashrc.d directory
+if [ -d ~/.bashrc.d ]; then
+    for file in ~/.bashrc.d/*; do
+        [ -f "$file" ] && source "$file"
+    done
+fi' >> ~/.bashrc
+        fi
+
         source ~/.bashrc
         break
         ;;
