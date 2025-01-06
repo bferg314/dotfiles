@@ -40,10 +40,6 @@ set tabstop=4
 set expandtab
 set linebreak
 
-" Add blank line in normal with enter
-nmap <S-Enter> O<Esc>
-nmap <CR> o<Esc>
-
 " Allow backspace in insert mode
 set backspace=indent,eol,start
 

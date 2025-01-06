@@ -26,7 +26,3 @@ nnoremap <C-L> <C-W><C-L>
 nnoremap <C-H> <C-W><C-H>
 
 set clipboard=unnamed
-
-" Add blank line in normal with enter
-nmap <S-Enter> O<Esc>
-nmap <CR> o<Esc>
