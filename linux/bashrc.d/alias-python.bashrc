@@ -5,7 +5,7 @@ alias pip='pip3'
 
 # Virtual environment aliases
 alias cvenv='python3 -m venv .venv'
-alias avenv='source ./venv/bin/activate'
+alias avenv='source ./.venv/bin/activate'
 alias dvenv='deactivate'
 
 # Common Python commands
