@@ -1,6 +1,5 @@
 # Python version aliases
 Set-Alias -Name py -Value python
-Set-Alias -Name pip -Value pip
 
 # Virtual environment functions
 function New-VirtualEnv { python -m venv .venv }
@@ -27,7 +26,7 @@ function Update-PipPackages {
     ForEach-Object { $_.split('==')[0] } | 
     ForEach-Object { pip install -U $_ }
 }
-Set-Alias -Name pip-upgrade -Value Update-PipPackages
+Set-Alias -Name pipup -Value Update-PipPackages
 
 function Export-Requirements { pip freeze > requirements.txt }
 Set-Alias -Name pipf -Value Export-Requirements
