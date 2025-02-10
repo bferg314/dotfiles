@@ -11,7 +11,7 @@
 # oh-my-posh init pwsh | Invoke-Expression
 # custom theme:
 Clear-Host
-Invoke-Expression (&oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/blueish.omp.json")
+Invoke-Expression (&oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/kali.omp.json")
 # lil help for missing venv visibility
 
 
