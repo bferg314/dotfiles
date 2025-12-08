@@ -33,7 +33,7 @@ map <F3> :source ~/vim_session <cr>     " And load session with F3
 
 " Use system clipboard (plus for Linux)
 " set clipboard=unnamed
-set clipboard+=unnamedplus
+set clipboard=unnamedplus
 
 " 4 tabs, spaces, and line breaks
 set tabstop=4
