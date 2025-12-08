@@ -37,7 +37,7 @@ alias path='echo -e ${PATH//:/\\n}'   # Pretty print PATH
 alias ports='netstat -tulanp'         # Show active ports
 alias mem='free -h'                   # Memory use
 alias disk='df -h /'                  # Disk usage
-alias ps?='ps aux | grep'             # Process search
+alias 'ps?=ps aux | grep'             # Process search
 alias myip='curl ifconfig.me'         # External IP
 
 # Make some possibly destructive commands more interactive.

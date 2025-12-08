@@ -1,11 +1,22 @@
 # History configuration
 HISTSIZE=10000
 HISTFILESIZE=20000
-HISTCONTROL=ignoreboth:erasedups
-HISTIGNORE="ls:ll:cd:pwd:exit:clear"
 
-# Append to history instead of overwriting
-shopt -s histappend
+# Bash-specific settings
+if [ -n "$BASH_VERSION" ]; then
+    HISTCONTROL=ignoreboth:erasedups
+    HISTIGNORE="ls:ll:cd:pwd:exit:clear"
+    # Append to history instead of overwriting
+    shopt -s histappend
+fi
+
+# Zsh-specific settings
+if [ -n "$ZSH_VERSION" ]; then
+    SAVEHIST=10000
+    setopt HIST_IGNORE_ALL_DUPS
+    setopt HIST_FIND_NO_DUPS
+    setopt APPEND_HISTORY
+fi
 
 # forget most recent entry
 function forget() {
@@ -13,8 +24,15 @@ function forget() {
 }
 
 # Search history with up/down arrows
-bind '"\e[A": history-search-backward'
-bind '"\e[B": history-search-forward'
+if [ -n "$BASH_VERSION" ]; then
+    bind '"\e[A": history-search-backward'
+    bind '"\e[B": history-search-forward'
+fi
+
+if [ -n "$ZSH_VERSION" ]; then
+    bindkey '^[[A' history-beginning-search-backward
+    bindkey '^[[B' history-beginning-search-forward
+fi
 
 # Quick history search function
 function hg() {
