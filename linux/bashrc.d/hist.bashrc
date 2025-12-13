@@ -24,7 +24,7 @@ function forget() {
 }
 
 # Search history with up/down arrows
-if [ -n "$BASH_VERSION" ]; then
+if [ -n "$BASH_VERSION" ] && [[ $- == *i* ]]; then
     bind '"\e[A": history-search-backward'
     bind '"\e[B": history-search-forward'
 fi
