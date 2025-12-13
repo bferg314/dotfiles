@@ -49,6 +49,12 @@ alias cp='cp -i'
 # and exclude grepping through .svn folders.
 alias grep='grep --color=auto --exclude-dir=\.svn'
 
+# Fedora-specific aliases
+if [ -f /etc/fedora-release ]; then
+    # Vim with X support
+    alias vim=vimx
+fi
+
 
 
 
