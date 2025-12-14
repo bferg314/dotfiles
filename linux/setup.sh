@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 # Dotfiles setup script - works with both bash and zsh
 
-PS3='Please enter your choice: '
-options=("Create Links" "Install VimPlug" "Install zsh" "Update" "Quit")
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Display header
+clear
+echo -e "${BOLD}${CYAN}"
+echo "╔════════════════════════════════════════╗"
+echo "║     Dotfiles Setup & Installation      ║"
+echo "╚════════════════════════════════════════╝"
+echo -e "${NC}"
+
+COLUMNS=1
+PS3=$'\n\033[1m\033[0;34mEnter your choice (1-8):\033[0m '
+options=("Create Links" "Install VimPlug" "Install zsh" "Install Base Tools" "Install Desktop Apps" "Install Server Tools" "Update" "Quit")
 select opt in "${options[@]}"; do
     case $opt in
     "Create Links")
@@ -105,6 +124,33 @@ fi' >> ~/.zshrc
                 echo "✓ Default shell changed to zsh (will take effect on next login)"
             fi
         fi
+        break
+        ;;
+    "Install Base Tools")
+        # Get the directory where this script is located
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+        # Make the install script executable and run it
+        chmod +x "$SCRIPT_DIR/installs/base.sh"
+        "$SCRIPT_DIR/installs/base.sh"
+        break
+        ;;
+    "Install Desktop Apps")
+        # Get the directory where this script is located
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+        # Make the install script executable and run it
+        chmod +x "$SCRIPT_DIR/installs/desktop.sh"
+        "$SCRIPT_DIR/installs/desktop.sh"
+        break
+        ;;
+    "Install Server Tools")
+        # Get the directory where this script is located
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+        # Make the install script executable and run it
+        chmod +x "$SCRIPT_DIR/installs/server.sh"
+        "$SCRIPT_DIR/installs/server.sh"
         break
         ;;
     "Update")
