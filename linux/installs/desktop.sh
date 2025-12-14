@@ -181,4 +181,26 @@ fi
 echo -e "${GREEN}✓ Discord installed${NC}"
 echo
 
+# 7. Install GitHub Desktop
+echo -e "${YELLOW}Installing GitHub Desktop...${NC}"
+if [ "$PKG_MANAGER" = "pacman" ]; then
+    if command -v yay >/dev/null 2>&1; then
+        yay -S --noconfirm github-desktop-bin
+    elif command -v paru >/dev/null 2>&1; then
+        paru -S --noconfirm github-desktop-bin
+    else
+        echo "Note: Install 'yay' or 'paru' AUR helper for GitHub Desktop"
+        echo "Skipping GitHub Desktop installation"
+    fi
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    # Install GitHub Desktop via Flatpak
+    flatpak install -y flathub io.github.shiftey.Desktop
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    wget -O github-desktop.deb "https://github.com/shiftkey/desktop/releases/latest/download/GitHubDesktop-linux-amd64-*.deb"
+    sudo apt install -y ./github-desktop.deb
+    rm github-desktop.deb
+fi
+echo -e "${GREEN}✓ GitHub Desktop installed${NC}"
+echo
+
 echo -e "${BOLD}${GREEN}=== Desktop Applications Installation Complete ===${NC}"

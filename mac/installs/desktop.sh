@@ -99,4 +99,16 @@ else
 fi
 echo
 
+# 7. Install GitHub Desktop
+echo -e "${YELLOW}Installing GitHub Desktop...${NC}"
+if [ -d "/Applications/GitHub Desktop.app" ]; then
+    echo -e "${GREEN}✓ GitHub Desktop already installed${NC}"
+elif brew list --cask github &>/dev/null; then
+    echo -e "${GREEN}✓ GitHub Desktop already installed via Homebrew${NC}"
+else
+    brew install --cask github 2>&1 || echo -e "${YELLOW}⚠ GitHub Desktop installation skipped (may already exist)${NC}"
+    echo -e "${GREEN}✓ GitHub Desktop installed${NC}"
+fi
+echo
+
 echo -e "${BOLD}${GREEN}=== Desktop Applications Installation Complete ===${NC}"
