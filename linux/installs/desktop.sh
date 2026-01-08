@@ -16,17 +16,31 @@ NC='\033[0m' # No Color
 echo -e "${BOLD}${CYAN}=== Desktop Applications Installation ===${NC}"
 echo
 
-# Detect package manager
+# Detect distribution and package manager
 if command -v pacman >/dev/null 2>&1; then
     PKG_MANAGER="pacman"
+    DISTRO="arch"
     INSTALL_CMD="sudo pacman -S --noconfirm"
     UPDATE_CMD="sudo pacman -Sy"
 elif command -v dnf >/dev/null 2>&1; then
     PKG_MANAGER="dnf"
     INSTALL_CMD="sudo dnf install -y"
     UPDATE_CMD="sudo dnf check-update || true"
+
+    # Detect if Fedora or AlmaLinux/RHEL
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
+            DISTRO="rhel"
+        else
+            DISTRO="fedora"
+        fi
+    else
+        DISTRO="fedora"  # Default to Fedora if can't detect
+    fi
 elif command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt"
+    DISTRO="debian"
     INSTALL_CMD="sudo apt-get install -y"
     UPDATE_CMD="sudo apt-get update"
 else
@@ -35,6 +49,9 @@ else
 fi
 
 echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
+if [ "$PKG_MANAGER" = "dnf" ]; then
+    echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
+fi
 echo
 
 # Update package lists
@@ -42,7 +59,7 @@ echo -e "${YELLOW}Updating package lists...${NC}"
 $UPDATE_CMD
 echo
 
-# Install and setup Flatpak if on Fedora/dnf
+# Install and setup Flatpak if on Fedora/dnf/RHEL
 if [ "$PKG_MANAGER" = "dnf" ]; then
     if ! command -v flatpak >/dev/null 2>&1; then
         echo -e "${YELLOW}Installing Flatpak...${NC}"
@@ -69,13 +86,19 @@ if [ "$PKG_MANAGER" = "pacman" ]; then
     fi
     $INSTALL_CMD steam
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    # Enable RPM Fusion for Steam on Fedora
-    if ! dnf repolist | grep -q rpmfusion; then
-        echo "Enabling RPM Fusion repositories..."
-        $INSTALL_CMD https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
-        $INSTALL_CMD https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+    if [ "$DISTRO" = "fedora" ]; then
+        # Enable RPM Fusion for Steam on Fedora
+        if ! dnf repolist | grep -q rpmfusion; then
+            echo "Enabling RPM Fusion repositories..."
+            $INSTALL_CMD https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+            $INSTALL_CMD https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+        fi
+        $INSTALL_CMD steam
+    else
+        # AlmaLinux/RHEL: Use Flatpak for Steam
+        echo -e "${BLUE}Installing Steam via Flatpak (RHEL-based distro)...${NC}"
+        flatpak install -y flathub com.valvesoftware.Steam
     fi
-    $INSTALL_CMD steam
 elif [ "$PKG_MANAGER" = "apt" ]; then
     # Add multiverse for Steam on Ubuntu
     sudo add-apt-repository -y multiverse
@@ -104,6 +127,7 @@ if [ "$PKG_MANAGER" = "pacman" ]; then
         echo "Skipping VS Code installation"
     fi
 elif [ "$PKG_MANAGER" = "dnf" ]; then
+    # VS Code repository works on both Fedora and RHEL-based distros
     sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
     sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
     $UPDATE_CMD

@@ -16,17 +16,31 @@ NC='\033[0m' # No Color
 echo -e "${BOLD}${CYAN}=== Server Tools Installation ===${NC}"
 echo
 
-# Detect package manager
+# Detect distribution and package manager
 if command -v pacman >/dev/null 2>&1; then
     PKG_MANAGER="pacman"
+    DISTRO="arch"
     INSTALL_CMD="sudo pacman -S --noconfirm"
     UPDATE_CMD="sudo pacman -Sy"
 elif command -v dnf >/dev/null 2>&1; then
     PKG_MANAGER="dnf"
     INSTALL_CMD="sudo dnf install -y"
     UPDATE_CMD="sudo dnf check-update || true"
+
+    # Detect if Fedora or AlmaLinux/RHEL
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
+            DISTRO="rhel"
+        else
+            DISTRO="fedora"
+        fi
+    else
+        DISTRO="fedora"  # Default to Fedora if can't detect
+    fi
 elif command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt"
+    DISTRO="debian"
     INSTALL_CMD="sudo apt-get install -y"
     UPDATE_CMD="sudo apt-get update"
 else
@@ -35,6 +49,9 @@ else
 fi
 
 echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
+if [ "$PKG_MANAGER" = "dnf" ]; then
+    echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
+fi
 echo
 
 # Update package lists

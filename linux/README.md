@@ -22,6 +22,16 @@ Configuration files and scripts for setting up a Linux development environment.
 - **tmux/.tmux.conf**: tmux configuration with custom prefix and splits
 - **screen/.screenrc**: GNU Screen configuration with status bar
 
+## Supported Distributions
+
+The setup scripts support the following Linux distributions:
+- **Arch Linux** (pacman)
+- **Fedora** (dnf)
+- **AlmaLinux** (dnf)
+- **Rocky Linux** (dnf)
+- **RHEL** (dnf)
+- **Ubuntu/Debian** (apt)
+
 ## Installation
 
 1. Clone the repository:
@@ -38,7 +48,10 @@ cd dotfiles/linux
 The setup script provides options to:
 - Create symbolic links for all dotfiles
 - Install Vim-Plug
-- Install Oh My Zsh
+- Install zsh and Oh My Zsh
+- Install Base Tools (development environment)
+- Install Desktop Apps (GUI applications)
+- Install Server Tools (server utilities)
 - Update the repository
 
 ## Features

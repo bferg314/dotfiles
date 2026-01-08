@@ -16,9 +16,10 @@ NC='\033[0m' # No Color
 echo -e "${BOLD}${CYAN}=== Base Tools Installation ===${NC}"
 echo
 
-# Detect package manager
+# Detect distribution and package manager
 if command -v pacman >/dev/null 2>&1; then
     PKG_MANAGER="pacman"
+    DISTRO="arch"
     INSTALL_CMD="sudo pacman -S --noconfirm"
     UPDATE_CMD="sudo pacman -Sy"
     GROUP_INSTALL="sudo pacman -S --noconfirm base-devel"
@@ -27,8 +28,21 @@ elif command -v dnf >/dev/null 2>&1; then
     INSTALL_CMD="sudo dnf install -y"
     UPDATE_CMD="sudo dnf check-update || true"
     GROUP_INSTALL="sudo dnf install -y @development-tools"
+
+    # Detect if Fedora or AlmaLinux/RHEL
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
+            DISTRO="rhel"
+        else
+            DISTRO="fedora"
+        fi
+    else
+        DISTRO="fedora"  # Default to Fedora if can't detect
+    fi
 elif command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt"
+    DISTRO="debian"
     INSTALL_CMD="sudo apt-get install -y"
     UPDATE_CMD="sudo apt-get update"
     GROUP_INSTALL="sudo apt-get install -y build-essential"
@@ -38,6 +52,9 @@ else
 fi
 
 echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
+if [ "$PKG_MANAGER" = "dnf" ]; then
+    echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
+fi
 echo
 
 # Update package lists
@@ -66,7 +83,13 @@ if [ "$PKG_MANAGER" = "pacman" ]; then
 elif [ "$PKG_MANAGER" = "dnf" ]; then
     $INSTALL_CMD dnf-plugins-core
     if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
-        sudo dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
+        if [ "$DISTRO" = "rhel" ]; then
+            # AlmaLinux/RHEL use different Docker repository
+            sudo dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/rhel/docker-ce.repo
+        else
+            # Fedora
+            sudo dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
+        fi
     else
         echo -e "${BLUE}Docker repository already configured${NC}"
     fi
