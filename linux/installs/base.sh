@@ -62,14 +62,14 @@ echo -e "${YELLOW}Updating package lists...${NC}"
 $UPDATE_CMD
 echo
 
-# 1. Install Vim with clipboard support
-echo -e "${YELLOW}Installing vim with clipboard support...${NC}"
+# 1. Install Vim
+echo -e "${YELLOW}Installing vim...${NC}"
 if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD vim gvim  # gvim provides clipboard support
+    $INSTALL_CMD vim
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    $INSTALL_CMD vim-enhanced vim-X11  # vim-X11 provides clipboard support
+    $INSTALL_CMD vim-enhanced  # Enhanced vim without GUI dependencies
 elif [ "$PKG_MANAGER" = "apt" ]; then
-    $INSTALL_CMD vim vim-gtk3  # vim-gtk3 provides clipboard support
+    $INSTALL_CMD vim
 fi
 echo -e "${GREEN}✓ Vim installed${NC}"
 echo

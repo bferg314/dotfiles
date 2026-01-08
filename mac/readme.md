@@ -18,9 +18,8 @@ Configuration files and scripts for setting up a macOS development environment.
   - Goyo & Limelight for distraction-free writing
   - Git integration (fugitive, gitgutter)
 
-### Terminal Multiplexers
+### Terminal Multiplexer
 - **tmux/.tmux.conf**: tmux configuration with custom prefix and splits
-- **screen/.screenrc**: GNU Screen configuration with status bar
 
 ## Installation
 
@@ -58,14 +57,13 @@ The setup script provides options to:
 ### Terminal Multiplexing
 - Custom tmux prefix (Ctrl+A)
 - Easy window splitting
-- Informative status bars
-- Screen session management
+- Informative status bar
 
 ## Requirements
 - zsh
 - Git
 - Vim (optional)
-- tmux/screen (optional)
+- tmux (optional)
 - Python (optional)
 
 ## Customization

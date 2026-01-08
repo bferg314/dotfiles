@@ -35,7 +35,6 @@ select opt in "${options[@]}"; do
 
         # Link other dotfiles
         ln -s -f "$REPO_ROOT/linux/vim/.vimrc" ~/.vimrc
-        ln -s -f "$REPO_ROOT/linux/screen/.screenrc" ~/.screenrc
         ln -s -f "$REPO_ROOT/linux/tmux/.tmux.conf" ~/.tmux.conf
 
         # Configure .bashrc to source bashrc.d

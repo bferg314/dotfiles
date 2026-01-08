@@ -1,8 +1,0 @@
-# GNU Screen configuration
-
-# Status bar customization
-hardstatus alwayslastline
-hardstatus string '%{= kG}[%H] %{= kw}%-w%{= kW}%n %t%{-}%+w %=%{= kG}[%Y-%m-%d %c]'
-
-# Enable mouse mode
-termcapinfo xterm* ti@:te@

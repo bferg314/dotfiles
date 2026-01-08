@@ -75,6 +75,18 @@ if [ "$PKG_MANAGER" = "dnf" ]; then
     echo
 fi
 
+# Install GUI Vim with clipboard support (desktop environments)
+echo -e "${YELLOW}Installing GUI Vim with clipboard support...${NC}"
+if [ "$PKG_MANAGER" = "pacman" ]; then
+    $INSTALL_CMD gvim  # gvim provides GUI and clipboard support
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    $INSTALL_CMD vim-X11  # vim-X11 provides GUI and clipboard support
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    $INSTALL_CMD vim-gtk3  # vim-gtk3 provides GUI and clipboard support
+fi
+echo -e "${GREEN}✓ GUI Vim installed${NC}"
+echo
+
 # 1. Install Steam
 echo -e "${YELLOW}Installing Steam...${NC}"
 if [ "$PKG_MANAGER" = "pacman" ]; then
