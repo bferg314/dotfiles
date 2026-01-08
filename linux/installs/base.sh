@@ -116,10 +116,10 @@ else
 fi
 echo
 
-# 3. Install screen and tmux
-echo -e "${YELLOW}Installing screen and tmux...${NC}"
-$INSTALL_CMD screen tmux
-echo -e "${GREEN}✓ screen and tmux installed${NC}"
+# 3. Install tmux
+echo -e "${YELLOW}Installing tmux...${NC}"
+$INSTALL_CMD tmux
+echo -e "${GREEN}✓ tmux installed${NC}"
 echo
 
 # 4. Install Python3 and pip
