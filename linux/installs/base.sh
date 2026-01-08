@@ -27,18 +27,20 @@ elif command -v dnf >/dev/null 2>&1; then
     PKG_MANAGER="dnf"
     INSTALL_CMD="sudo dnf install -y"
     UPDATE_CMD="sudo dnf check-update || true"
-    GROUP_INSTALL="sudo dnf install -y @development-tools"
 
     # Detect if Fedora or AlmaLinux/RHEL
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
             DISTRO="rhel"
+            GROUP_INSTALL="sudo dnf groupinstall -y 'Development Tools'"
         else
             DISTRO="fedora"
+            GROUP_INSTALL="sudo dnf install -y @development-tools"
         fi
     else
         DISTRO="fedora"  # Default to Fedora if can't detect
+        GROUP_INSTALL="sudo dnf install -y @development-tools"
     fi
 elif command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt"
