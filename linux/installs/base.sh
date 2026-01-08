@@ -33,7 +33,7 @@ elif command -v dnf >/dev/null 2>&1; then
         . /etc/os-release
         if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
             DISTRO="rhel"
-            GROUP_INSTALL="sudo dnf groupinstall -y 'Development Tools'"
+            GROUP_INSTALL="sudo dnf groupinstall -y \"Development Tools\""
         else
             DISTRO="fedora"
             GROUP_INSTALL="sudo dnf install -y @development-tools"
