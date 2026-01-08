@@ -22,7 +22,6 @@ if command -v pacman >/dev/null 2>&1; then
     DISTRO="arch"
     INSTALL_CMD="sudo pacman -S --noconfirm"
     UPDATE_CMD="sudo pacman -Sy"
-    GROUP_INSTALL="sudo pacman -S --noconfirm base-devel"
 elif command -v dnf >/dev/null 2>&1; then
     PKG_MANAGER="dnf"
     INSTALL_CMD="sudo dnf install -y"
@@ -33,21 +32,17 @@ elif command -v dnf >/dev/null 2>&1; then
         . /etc/os-release
         if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
             DISTRO="rhel"
-            GROUP_INSTALL="sudo dnf groupinstall -y \"Development Tools\""
         else
             DISTRO="fedora"
-            GROUP_INSTALL="sudo dnf install -y @development-tools"
         fi
     else
         DISTRO="fedora"  # Default to Fedora if can't detect
-        GROUP_INSTALL="sudo dnf install -y @development-tools"
     fi
 elif command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt"
     DISTRO="debian"
     INSTALL_CMD="sudo apt-get install -y"
     UPDATE_CMD="sudo apt-get update"
-    GROUP_INSTALL="sudo apt-get install -y build-essential"
 else
     echo "Error: Unable to detect package manager (pacman, dnf, or apt)"
     exit 1
@@ -164,7 +159,17 @@ echo
 
 # 6. Install Development Tools
 echo -e "${YELLOW}Installing development tools...${NC}"
-$GROUP_INSTALL
+if [ "$PKG_MANAGER" = "pacman" ]; then
+    sudo pacman -S --noconfirm base-devel
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    if [ "$DISTRO" = "rhel" ]; then
+        sudo dnf groupinstall -y "Development Tools"
+    else
+        sudo dnf install -y @development-tools
+    fi
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    sudo apt-get install -y build-essential
+fi
 echo -e "${GREEN}✓ Development tools installed${NC}"
 echo
 
