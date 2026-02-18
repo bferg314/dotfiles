@@ -242,6 +242,7 @@ setup_authorized_keys() {
     echo
     echo -e "${CYAN}  Paste the public SSH key from the machine you will remote in from.${NC}"
     echo -e "${CYAN}  (e.g., from your local ~/.ssh/id_*.pub)${NC}"
+    echo -e "${CYAN}  Usually: cat ~/.ssh/id_ed25519.pub ${NC}"
     echo -e "${CYAN}  Press Enter to skip.${NC}"
     echo
     read -p "$(echo -e "${BOLD}  Paste public key: ${NC}")" pasted_key
