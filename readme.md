@@ -14,11 +14,32 @@ This repository contains my personal dotfiles, organized by operating system. It
 
 ## Quick Start
 
+### New Linux Machine (Bootstrap)
+
+Run this on any fresh Linux device — it will walk you through everything:
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.sh)
+```
+
+Or with curl:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.sh)
+```
+
+This will:
+1. Install `git` and `vim`
+2. Clone this repo to `~/dotfiles`
+3. Set up your git username and email
+4. Generate an SSH key to import into GitHub
+5. Add a public SSH key so you can remote in without a password
+
 ### Windows
 - Run `windows/setup.ps1` to configure PowerShell environment
 - See [Windows Setup Guide](windows/README.md) for detailed instructions
 
-### Linux
+### Linux (existing machine)
 - Source the required `.bashrc` files
 - See [Linux Setup Guide](linux/README.md) for detailed instructions
 
