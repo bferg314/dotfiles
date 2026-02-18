@@ -49,6 +49,11 @@ alias cp='cp -i'
 # and exclude grepping through .svn folders.
 alias grep='grep --color=auto --exclude-dir=\.svn'
 
+# Run dotfiles setup from anywhere
+dotsetup() {
+    bash "$(dirname "$(readlink -f ~/.bashrc.d/alias-bash.bashrc)")/../setup.sh"
+}
+
 
 
 
