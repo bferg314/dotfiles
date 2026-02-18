@@ -33,6 +33,7 @@ while true; do
     show_menu
     read -p $'\033[1m\033[0;34mEnter your choice (1-8):\033[0m ' choice
     echo
+    [ -z "$choice" ] && break
 
     case $choice in
     1)
@@ -162,7 +163,6 @@ fi' >> ~/.zshrc
     8)
         break
         ;;
-    "") break ;;
     *) echo "Invalid option" ;;
     esac
 
