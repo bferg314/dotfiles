@@ -11,20 +11,31 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Display header
-clear
-echo -e "${BOLD}${CYAN}"
-echo "╔════════════════════════════════════════╗"
-echo "║     Dotfiles Setup & Installation      ║"
-echo "╚════════════════════════════════════════╝"
-echo -e "${NC}"
+show_menu() {
+    clear
+    echo -e "${BOLD}${CYAN}"
+    echo "╔════════════════════════════════════════╗"
+    echo "║     Dotfiles Setup & Installation      ║"
+    echo "╚════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo "  1) Create Links"
+    echo "  2) Install VimPlug"
+    echo "  3) Install zsh"
+    echo "  4) Install Base Tools"
+    echo "  5) Install Desktop Apps"
+    echo "  6) Install Server Tools"
+    echo "  7) Update"
+    echo "  8) Quit"
+    echo
+}
 
-COLUMNS=1
-PS3=$'\n\033[1m\033[0;34mEnter your choice (1-8):\033[0m '
-options=("Create Links" "Install VimPlug" "Install zsh" "Install Base Tools" "Install Desktop Apps" "Install Server Tools" "Update" "Quit")
-select opt in "${options[@]}"; do
-    case $opt in
-    "Create Links")
+while true; do
+    show_menu
+    read -p $'\033[1m\033[0;34mEnter your choice (1-8):\033[0m ' choice
+    echo
+
+    case $choice in
+    1)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
@@ -76,14 +87,14 @@ fi' >> ~/.zshrc
 
         echo "✓ Setup complete! Links created and shell configured."
         ;;
-    "Install VimPlug")
+    2)
         # install vim-plug
         curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
         curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
         ;;
-    "Install zsh")
+    3)
         # Check if zsh is already installed
         if command -v zsh >/dev/null 2>&1; then
             echo "✓ zsh is already installed"
@@ -103,7 +114,6 @@ fi' >> ~/.zshrc
                 sudo dnf install -y zsh
             else
                 echo "Unable to detect package manager. Please install zsh manually."
-                break
             fi
 
             # Offer to install oh-my-zsh
@@ -122,7 +132,7 @@ fi' >> ~/.zshrc
             fi
         fi
         ;;
-    "Install Base Tools")
+    4)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -130,7 +140,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/base.sh"
         "$SCRIPT_DIR/installs/base.sh"
         ;;
-    "Install Desktop Apps")
+    5)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -138,7 +148,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/desktop.sh"
         "$SCRIPT_DIR/installs/desktop.sh"
         ;;
-    "Install Server Tools")
+    6)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -146,14 +156,17 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/server.sh"
         "$SCRIPT_DIR/installs/server.sh"
         ;;
-    "Update")
+    7)
         git reset --hard HEAD
         git clean -xffd
         git pull
         ;;
-    "Quit")
+    8)
         break
         ;;
-    *) echo invalid option ;;
+    *) echo "Invalid option" ;;
     esac
+
+    echo
+    read -p "Press Enter to continue..."
 done
