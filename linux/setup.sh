@@ -75,7 +75,6 @@ fi' >> ~/.zshrc
         fi
 
         echo "✓ Setup complete! Links created and shell configured."
-        break
         ;;
     "Install VimPlug")
         # install vim-plug
@@ -83,7 +82,6 @@ fi' >> ~/.zshrc
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
         curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-        break
         ;;
     "Install zsh")
         # Check if zsh is already installed
@@ -123,7 +121,6 @@ fi' >> ~/.zshrc
                 echo "✓ Default shell changed to zsh (will take effect on next login)"
             fi
         fi
-        break
         ;;
     "Install Base Tools")
         # Get the directory where this script is located
@@ -132,7 +129,6 @@ fi' >> ~/.zshrc
         # Make the install script executable and run it
         chmod +x "$SCRIPT_DIR/installs/base.sh"
         "$SCRIPT_DIR/installs/base.sh"
-        break
         ;;
     "Install Desktop Apps")
         # Get the directory where this script is located
@@ -141,7 +137,6 @@ fi' >> ~/.zshrc
         # Make the install script executable and run it
         chmod +x "$SCRIPT_DIR/installs/desktop.sh"
         "$SCRIPT_DIR/installs/desktop.sh"
-        break
         ;;
     "Install Server Tools")
         # Get the directory where this script is located
@@ -150,13 +145,11 @@ fi' >> ~/.zshrc
         # Make the install script executable and run it
         chmod +x "$SCRIPT_DIR/installs/server.sh"
         "$SCRIPT_DIR/installs/server.sh"
-        break
         ;;
     "Update")
         git reset --hard HEAD
         git clean -xffd
         git pull
-        break
         ;;
     "Quit")
         break
