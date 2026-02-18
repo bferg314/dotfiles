@@ -17,7 +17,7 @@ alias du='du -h'
 # Quick edits
 alias e_vim='vim ~/.vimrc'
 alias e_zsh='vim ~/.zshrc'
-alias e_tmux='vim ~/.tmux.conf'
+alias e_zellij='vim ~/.config/zellij/config.kdl'
 alias e_bash='vim ~/.bashrc'
 alias e_cron='crontab -e'
 

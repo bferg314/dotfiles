@@ -47,7 +47,8 @@ while true; do
 
         # Link other dotfiles
         ln -s -f "$REPO_ROOT/linux/vim/.vimrc" ~/.vimrc
-        ln -s -f "$REPO_ROOT/linux/tmux/.tmux.conf" ~/.tmux.conf
+        mkdir -p ~/.config/zellij
+        ln -s -f "$REPO_ROOT/linux/zellij/config.kdl" ~/.config/zellij/config.kdl
 
         # Configure .bashrc to source bashrc.d
         if ! grep -q "Source all files from bashrc.d directory" ~/.bashrc; then

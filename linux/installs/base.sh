@@ -113,10 +113,18 @@ else
 fi
 echo
 
-# 3. Install tmux
-echo -e "${YELLOW}Installing tmux...${NC}"
-$INSTALL_CMD tmux
-echo -e "${GREEN}✓ tmux installed${NC}"
+# 3. Install zellij
+echo -e "${YELLOW}Installing zellij...${NC}"
+if [ "$PKG_MANAGER" = "pacman" ]; then
+    $INSTALL_CMD zellij
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    $INSTALL_CMD zellij
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    ZELLIJ_VERSION=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+    curl -sL "https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp
+    sudo mv /tmp/zellij /usr/local/bin/zellij
+fi
+echo -e "${GREEN}✓ zellij installed${NC}"
 echo
 
 # 4. Install Python3 and pip

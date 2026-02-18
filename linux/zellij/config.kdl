@@ -1,0 +1,27 @@
+// Zellij configuration
+
+// Use Ctrl+a as the main modifier (consistent with previous tmux setup)
+keybinds {
+    normal {
+        // Unbind default Ctrl+b style and use Ctrl+a prefix feel
+    }
+}
+
+// UI options
+ui {
+    pane_frames {
+        rounded_corners true
+    }
+}
+
+// Theme
+theme "default"
+
+// Default shell
+default_shell "bash"
+
+// Scroll buffer size
+scroll_buffer_size 10000
+
+// Copy on select
+copy_on_select true
