@@ -119,7 +119,7 @@ if [ "$PKG_MANAGER" = "pacman" ]; then
     $INSTALL_CMD zellij
 else
     ZELLIJ_VERSION=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-    rm -f /tmp/zellij
+    rm -rf /tmp/zellij
     curl -sL "https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp
     sudo mv /tmp/zellij /usr/local/bin/zellij
 fi
