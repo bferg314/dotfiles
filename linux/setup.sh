@@ -78,14 +78,8 @@ fi' >> ~/.zshrc
             fi
         fi
 
-        # Source the appropriate rc file based on current shell
-        if [ -n "$ZSH_VERSION" ]; then
-            source ~/.zshrc
-        elif [ -n "$BASH_VERSION" ]; then
-            source ~/.bashrc
-        fi
-
         echo "✓ Setup complete! Links created and shell configured."
+        echo "  Run '. ~/.bashrc' to apply changes to your current session."
         ;;
     2)
         # install vim-plug
@@ -93,6 +87,8 @@ fi' >> ~/.zshrc
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
         curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+        echo "✓ VimPlug installed."
+        echo "  Open vim and run ':PlugInstall' to install your plugins."
         ;;
     3)
         # Check if zsh is already installed
@@ -157,13 +153,16 @@ fi' >> ~/.zshrc
         "$SCRIPT_DIR/installs/server.sh"
         ;;
     7)
-        git reset --hard HEAD
-        git clean -xffd
-        git pull
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+        git -C "$REPO_ROOT" reset --hard HEAD
+        git -C "$REPO_ROOT" clean -xffd
+        git -C "$REPO_ROOT" pull
         ;;
     8)
         break
         ;;
+    "") break ;;
     *) echo "Invalid option" ;;
     esac
 
