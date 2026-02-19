@@ -54,6 +54,16 @@ if [ "$PKG_MANAGER" = "dnf" ]; then
 fi
 echo
 
+# On Debian, remove stale Ubuntu docker repo if present (left from previous runs)
+if [ "$PKG_MANAGER" = "apt" ] && [ -f /etc/apt/sources.list.d/docker.list ]; then
+    if grep -q "download.docker.com/linux/ubuntu" /etc/apt/sources.list.d/docker.list; then
+        if [ -f /etc/os-release ] && grep -q '^ID=debian' /etc/os-release; then
+            echo -e "${YELLOW}Removing stale Ubuntu Docker repo on Debian...${NC}"
+            sudo rm /etc/apt/sources.list.d/docker.list
+        fi
+    fi
+fi
+
 # Update package lists
 echo -e "${YELLOW}Updating package lists...${NC}"
 $UPDATE_CMD
