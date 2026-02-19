@@ -157,9 +157,10 @@ fi' >> ~/.zshrc
     7)
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
-        git -C "$REPO_ROOT" reset --hard HEAD
-        git -C "$REPO_ROOT" clean -xffd
-        git -C "$REPO_ROOT" pull
+        BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
+        git -C "$REPO_ROOT" fetch origin
+        git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
+        git -C "$REPO_ROOT" clean -ffd
         ;;
     8)
         break
