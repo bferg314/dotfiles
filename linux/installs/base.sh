@@ -54,14 +54,14 @@ if [ "$PKG_MANAGER" = "dnf" ]; then
 fi
 echo
 
-# On Debian, remove stale Ubuntu docker repo if present (left from previous runs)
-if [ "$PKG_MANAGER" = "apt" ] && [ -f /etc/apt/sources.list.d/docker.list ]; then
-    if grep -q "download.docker.com/linux/ubuntu" /etc/apt/sources.list.d/docker.list; then
-        if [ -f /etc/os-release ] && grep -q '^ID=debian' /etc/os-release; then
-            echo -e "${YELLOW}Removing stale Ubuntu Docker repo on Debian...${NC}"
-            sudo rm /etc/apt/sources.list.d/docker.list
-        fi
-    fi
+# Clean up any stale/conflicting Docker repo and keyring files before update
+if [ "$PKG_MANAGER" = "apt" ]; then
+    for f in /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.sources; do
+        [ -f "$f" ] && sudo rm "$f" && echo -e "${YELLOW}Removed stale Docker repo: $f${NC}"
+    done
+    for k in /usr/share/keyrings/docker-archive-keyring.gpg /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.gpg; do
+        [ -f "$k" ] && sudo rm "$k" && echo -e "${YELLOW}Removed stale Docker keyring: $k${NC}"
+    done
 fi
 
 # Update package lists
@@ -113,8 +113,10 @@ elif [ "$PKG_MANAGER" = "apt" ]; then
             DOCKER_DISTRO="debian"
         fi
     fi
-    curl -fsSL "https://download.docker.com/linux/${DOCKER_DISTRO}/gpg" | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/${DOCKER_DISTRO} $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/${DOCKER_DISTRO}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_DISTRO} $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     $UPDATE_CMD
     $INSTALL_CMD docker-ce docker-ce-cli containerd.io docker-compose-plugin
     sudo systemctl enable docker
