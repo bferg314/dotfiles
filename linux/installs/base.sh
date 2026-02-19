@@ -95,8 +95,16 @@ elif [ "$PKG_MANAGER" = "dnf" ]; then
     sudo systemctl start docker
 elif [ "$PKG_MANAGER" = "apt" ]; then
     $INSTALL_CMD apt-transport-https ca-certificates curl gnupg lsb-release
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    # Detect debian vs ubuntu for correct docker repo
+    DOCKER_DISTRO="ubuntu"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "debian" ]] || [[ "$ID_LIKE" == *"debian"* && "$ID" != "ubuntu" ]]; then
+            DOCKER_DISTRO="debian"
+        fi
+    fi
+    curl -fsSL "https://download.docker.com/linux/${DOCKER_DISTRO}/gpg" | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/${DOCKER_DISTRO} $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     $UPDATE_CMD
     $INSTALL_CMD docker-ce docker-ce-cli containerd.io docker-compose-plugin
     sudo systemctl enable docker
