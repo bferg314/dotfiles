@@ -8,6 +8,12 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/USER/dotfiles/master/bootstrap.sh)
 
 DOTFILES_DIR="$HOME/dotfiles"
+IS_ROOT=false
+SUDO=""
+
+if [ "$(id -u)" -eq 0 ]; then
+    IS_ROOT=true
+fi
 
 # Color definitions (matches base.sh / server.sh / desktop.sh)
 RED='\033[0;31m'
@@ -26,6 +32,10 @@ print_header() {
     echo -e "${BOLD}${CYAN}║         Dotfiles Bootstrap Setup           ║${NC}"
     echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════╝${NC}"
     echo
+    if $IS_ROOT; then
+        echo -e "${YELLOW}  ⚠ Running as root${NC}"
+        echo
+    fi
 }
 
 step()  { echo -e "${BOLD}${BLUE}[Step $1]${NC} ${BOLD}$2${NC}"; }
@@ -39,15 +49,22 @@ sep()   { echo; echo -e "${CYAN}────────────────
 detect_package_manager() {
     step "1" "Detecting package manager"
 
+    # Set SUDO prefix (empty when running as root)
+    if $IS_ROOT; then
+        SUDO=""
+    else
+        SUDO="sudo"
+    fi
+
     if command -v pacman >/dev/null 2>&1; then
         PKG_MANAGER="pacman"
         DISTRO="arch"
-        INSTALL_CMD="sudo pacman -S --noconfirm"
-        UPDATE_CMD="sudo pacman -Sy"
+        INSTALL_CMD="$SUDO pacman -S --noconfirm"
+        UPDATE_CMD="$SUDO pacman -Sy"
     elif command -v dnf >/dev/null 2>&1; then
         PKG_MANAGER="dnf"
-        INSTALL_CMD="sudo dnf install -y"
-        UPDATE_CMD="sudo dnf check-update || true"
+        INSTALL_CMD="$SUDO dnf install -y"
+        UPDATE_CMD="$SUDO dnf check-update || true"
 
         if [ -f /etc/os-release ]; then
             . /etc/os-release
@@ -62,8 +79,8 @@ detect_package_manager() {
     elif command -v apt-get >/dev/null 2>&1; then
         PKG_MANAGER="apt"
         DISTRO="debian"
-        INSTALL_CMD="sudo apt-get install -y"
-        UPDATE_CMD="sudo apt-get update"
+        INSTALL_CMD="$SUDO apt-get install -y"
+        UPDATE_CMD="$SUDO apt-get update"
     else
         echo -e "${RED}  ✗ No supported package manager found (pacman / dnf / apt-get)${NC}"
         echo -e "${RED}    Supported: Arch Linux, Fedora, RHEL/AlmaLinux/Rocky, Ubuntu/Debian${NC}"
@@ -104,6 +121,113 @@ install_prerequisites() {
     fi
 
     sep
+}
+
+# ─── Step 2b: Install sudo (root only) and openssh-server ─────────────────────
+
+install_extra_prerequisites() {
+    step "2b" "Installing additional prerequisites"
+
+    # Install sudo (root only — non-root already has it or can't install it)
+    if $IS_ROOT; then
+        if command -v sudo >/dev/null 2>&1; then
+            ok "sudo already installed"
+        else
+            info "Installing sudo..."
+            if [ "$PKG_MANAGER" = "pacman" ]; then
+                pacman -S --noconfirm sudo
+            elif [ "$PKG_MANAGER" = "dnf" ]; then
+                dnf install -y sudo
+            else
+                apt-get install -y sudo
+            fi
+            ok "sudo installed"
+        fi
+    fi
+
+    # Install openssh-server
+    if systemctl list-unit-files sshd.service >/dev/null 2>&1 || \
+       systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+        ok "openssh-server already installed"
+    else
+        info "Installing openssh-server..."
+        if [ "$PKG_MANAGER" = "pacman" ]; then
+            $INSTALL_CMD openssh
+        elif [ "$PKG_MANAGER" = "dnf" ]; then
+            $INSTALL_CMD openssh-server
+        else
+            $INSTALL_CMD openssh-server
+        fi
+        ok "openssh-server installed"
+    fi
+
+    # Enable and start sshd
+    local sshd_name="sshd"
+    if [ "$DISTRO" = "debian" ]; then
+        sshd_name="ssh"
+    fi
+    if systemctl is-active --quiet "$sshd_name" 2>/dev/null; then
+        ok "${sshd_name} service is running"
+    else
+        info "Enabling and starting ${sshd_name}..."
+        systemctl enable --now "$sshd_name" 2>/dev/null || warn "Could not start ${sshd_name} (container?)"
+    fi
+
+    sep
+}
+
+# ─── Step 2c: Create a regular user (root only) ──────────────────────────────
+
+create_user_prompt() {
+    if ! $IS_ROOT; then
+        return 0
+    fi
+
+    step "2c" "User account setup"
+
+    echo
+    read -p "$(echo -e "${CYAN}  Create a new user account? [y/N]: ${NC}")" create_user
+    echo
+
+    if [[ ! "$create_user" =~ ^[Yy]$ ]]; then
+        warn "Continuing as root. Remaining steps will run as root."
+        return 0
+    fi
+
+    read -p "$(echo -e "${CYAN}  Enter username: ${NC}")" new_user
+    if [ -z "$new_user" ]; then
+        warn "No username entered, continuing as root"
+        return 0
+    fi
+
+    if id "$new_user" >/dev/null 2>&1; then
+        ok "User '$new_user' already exists"
+    else
+        info "Creating user '$new_user'..."
+        useradd -m -s /bin/bash "$new_user"
+        ok "User '$new_user' created"
+
+        info "Set a password for '$new_user':"
+        passwd "$new_user"
+    fi
+
+    # Add user to sudo/wheel group
+    if [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "fedora" ] || [ "$DISTRO" = "rhel" ]; then
+        usermod -aG wheel "$new_user"
+        ok "Added '$new_user' to wheel group"
+    else
+        usermod -aG sudo "$new_user"
+        ok "Added '$new_user' to sudo group"
+    fi
+
+    echo
+    info "Switching to user '$new_user' to continue bootstrap..."
+    echo
+
+    # Re-exec this script as the new user for the remaining steps
+    local script_path
+    script_path="$(readlink -f "$0")"
+    exec su - "$new_user" -c "bash '$script_path' --continue-as-user"
 }
 
 # ─── Step 3: Clone dotfiles repo ─────────────────────────────────────────────
@@ -304,10 +428,26 @@ offer_dotfiles_setup() {
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
+    local continue_as_user=false
+    if [ "$1" = "--continue-as-user" ]; then
+        continue_as_user=true
+        # Update DOTFILES_DIR for the new user's HOME
+        DOTFILES_DIR="$HOME/dotfiles"
+    fi
+
     print_header
 
-    detect_package_manager   # Step 1
-    install_prerequisites    # Step 2
+    if ! $continue_as_user; then
+        detect_package_manager   # Step 1
+        install_prerequisites    # Step 2
+        install_extra_prerequisites  # Step 2b (sudo if root + openssh-server)
+        create_user_prompt       # Step 2c (root only, may re-exec)
+    else
+        info "Continuing bootstrap as $(whoami)..."
+        echo
+        detect_package_manager   # Step 1 (re-detect for SUDO/INSTALL_CMD)
+    fi
+
     clone_dotfiles           # Step 3
     configure_git            # Step 4
     generate_ssh_key         # Step 5
