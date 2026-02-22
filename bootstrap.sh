@@ -224,10 +224,26 @@ create_user_prompt() {
     info "Switching to user '$new_user' to continue bootstrap..."
     echo
 
-    # Re-exec this script as the new user for the remaining steps
-    local script_path
-    script_path="$(readlink -f "$0")"
-    exec su - "$new_user" -c "bash '$script_path' --continue-as-user"
+    # Build a self-contained script for the new user.
+    # We can't rely on $0 (may be a pipe fd from bash <(curl ...)).
+    local tmp_script="/tmp/dotfiles-bootstrap-$$.sh"
+    {
+        echo '#!/usr/bin/env bash'
+        # Re-declare color variables and helpers
+        declare -p RED GREEN YELLOW BLUE CYAN BOLD NC 2>/dev/null
+        # Set up variables fresh for the new user context
+        echo 'DOTFILES_DIR="$HOME/dotfiles"'
+        echo 'IS_ROOT=false'
+        echo 'SUDO="sudo"'
+        echo 'if [ "$(id -u)" -eq 0 ]; then IS_ROOT=true; SUDO=""; fi'
+        # Export all function definitions
+        declare -f
+        # Invoke main in continue mode
+        echo 'main --continue-as-user'
+    } > "$tmp_script"
+    chmod 755 "$tmp_script"
+
+    exec su - "$new_user" -c "bash '$tmp_script'; rm -f '$tmp_script'"
 }
 
 # ─── Step 3: Clone dotfiles repo ─────────────────────────────────────────────
