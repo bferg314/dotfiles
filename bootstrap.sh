@@ -44,6 +44,50 @@ warn()  { echo -e "${YELLOW}  ! $1${NC}"; }
 info()  { echo -e "${BLUE}  → $1${NC}"; }
 sep()   { echo; echo -e "${CYAN}────────────────────────────────────────────${NC}"; echo; }
 
+# ─── Preview what will happen ─────────────────────────────────────────────────
+
+show_plan() {
+    local continue_as_user="$1"
+
+    echo -e "${BOLD}  This script will:${NC}"
+    echo
+
+    if $continue_as_user; then
+        echo -e "  ${CYAN}1.${NC} Detect your package manager"
+        echo -e "  ${CYAN}2.${NC} Clone your dotfiles repository"
+        echo -e "  ${CYAN}3.${NC} Configure git global identity"
+        echo -e "  ${CYAN}4.${NC} Generate an SSH key for GitHub"
+        echo -e "  ${CYAN}5.${NC} Set up authorized_keys for remote login"
+        echo -e "  ${CYAN}6.${NC} Optionally run full dotfiles setup"
+    elif $IS_ROOT; then
+        echo -e "  ${CYAN}1.${NC} Detect your package manager"
+        echo -e "  ${CYAN}2.${NC} Install ${BOLD}git${NC}, ${BOLD}vim${NC}, ${BOLD}sudo${NC}, and ${BOLD}openssh-server${NC}"
+        echo -e "  ${CYAN}3.${NC} Offer to create a regular user account (with sudo access)"
+        echo -e "  ${CYAN}4.${NC} Clone your dotfiles repository"
+        echo -e "  ${CYAN}5.${NC} Configure git global identity"
+        echo -e "  ${CYAN}6.${NC} Generate an SSH key for GitHub"
+        echo -e "  ${CYAN}7.${NC} Set up authorized_keys for remote login"
+        echo -e "  ${CYAN}8.${NC} Optionally run full dotfiles setup"
+    else
+        echo -e "  ${CYAN}1.${NC} Detect your package manager"
+        echo -e "  ${CYAN}2.${NC} Install ${BOLD}git${NC}, ${BOLD}vim${NC}, and ${BOLD}openssh-server${NC}"
+        echo -e "  ${CYAN}3.${NC} Clone your dotfiles repository"
+        echo -e "  ${CYAN}4.${NC} Configure git global identity"
+        echo -e "  ${CYAN}5.${NC} Generate an SSH key for GitHub"
+        echo -e "  ${CYAN}6.${NC} Set up authorized_keys for remote login"
+        echo -e "  ${CYAN}7.${NC} Optionally run full dotfiles setup"
+    fi
+
+    echo
+    read -p "$(echo -e "${CYAN}  Continue? [Y/n]: ${NC}")" confirm
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
+        echo
+        warn "Aborted."
+        exit 0
+    fi
+    sep
+}
+
 # ─── Step 1: Detect package manager ──────────────────────────────────────────
 
 detect_package_manager() {
@@ -452,6 +496,7 @@ main() {
     fi
 
     print_header
+    show_plan "$continue_as_user"
 
     if ! $continue_as_user; then
         detect_package_manager   # Step 1

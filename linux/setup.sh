@@ -24,14 +24,15 @@ show_menu() {
     echo "  4) Install Base Tools"
     echo "  5) Install Desktop Apps"
     echo "  6) Install Server Tools"
-    echo "  7) Update"
-    echo "  8) Quit"
+    echo "  7) Install Avahi (mDNS)"
+    echo "  8) Update"
+    echo "  9) Quit"
     echo
 }
 
 while true; do
     show_menu
-    read -p $'\033[1m\033[0;34mEnter your choice (1-8):\033[0m ' choice
+    read -p $'\033[1m\033[0;34mEnter your choice (1-9):\033[0m ' choice
     echo
     [ -z "$choice" ] && break
 
@@ -155,6 +156,14 @@ fi' >> ~/.zshrc
         "$SCRIPT_DIR/installs/server.sh"
         ;;
     7)
+        # Get the directory where this script is located
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+        # Make the install script executable and run it
+        chmod +x "$SCRIPT_DIR/installs/avahi.sh"
+        "$SCRIPT_DIR/installs/avahi.sh"
+        ;;
+    8)
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
         BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
@@ -162,7 +171,7 @@ fi' >> ~/.zshrc
         git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
         git -C "$REPO_ROOT" clean -ffd
         ;;
-    8)
+    9)
         break
         ;;
     *) echo "Invalid option" ;;
