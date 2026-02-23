@@ -506,6 +506,14 @@ main() {
     else
         info "Continuing bootstrap as $(whoami)..."
         echo
+        # Validate sudo upfront so subsequent commands don't fail
+        info "Verifying sudo access..."
+        if sudo -v; then
+            ok "sudo access confirmed"
+        else
+            warn "sudo authentication failed — installs requiring sudo may fail"
+        fi
+        echo
         detect_package_manager   # Step 1 (re-detect for SUDO/INSTALL_CMD)
     fi
 
