@@ -47,19 +47,10 @@ sep()   { echo; echo -e "${CYAN}────────────────
 # ─── Preview what will happen ─────────────────────────────────────────────────
 
 show_plan() {
-    local continue_as_user="$1"
-
     echo -e "${BOLD}  This script will:${NC}"
     echo
 
-    if $continue_as_user; then
-        echo -e "  ${CYAN}1.${NC} Detect your package manager"
-        echo -e "  ${CYAN}2.${NC} Clone your dotfiles repository"
-        echo -e "  ${CYAN}3.${NC} Configure git global identity"
-        echo -e "  ${CYAN}4.${NC} Generate an SSH key for GitHub"
-        echo -e "  ${CYAN}5.${NC} Set up authorized_keys for remote login"
-        echo -e "  ${CYAN}6.${NC} Optionally run full dotfiles setup"
-    elif $IS_ROOT; then
+    if $IS_ROOT; then
         echo -e "  ${CYAN}1.${NC} Detect your package manager"
         echo -e "  ${CYAN}2.${NC} Install ${BOLD}git${NC}, ${BOLD}vim${NC}, ${BOLD}sudo${NC}, and ${BOLD}openssh-server${NC}"
         echo -e "  ${CYAN}3.${NC} Offer to create a regular user account (with sudo access)"
@@ -264,32 +255,19 @@ create_user_prompt() {
         ok "Added '$new_user' to sudo group"
     fi
 
-    echo
-    info "Switching to user '$new_user' to continue bootstrap..."
-    echo
+    sep
 
-    # Build a self-contained script for the new user.
-    # We can't rely on $0 (may be a pipe fd from bash <(curl ...)).
-    local tmp_script="/tmp/dotfiles-bootstrap-$$.sh"
-    {
-        echo '#!/usr/bin/env bash'
-        # Re-declare color variables and helpers
-        declare -p RED GREEN YELLOW BLUE CYAN BOLD NC 2>/dev/null
-        # Set up variables fresh for the new user context
-        echo 'DOTFILES_DIR="$HOME/dotfiles"'
-        echo 'IS_ROOT=false'
-        echo 'SUDO="sudo"'
-        echo 'if [ "$(id -u)" -eq 0 ]; then IS_ROOT=true; SUDO=""; fi'
-        # Export all function definitions
-        declare -f
-        # Invoke main in continue mode
-        echo 'main --continue-as-user'
-    } > "$tmp_script"
-    chmod 755 "$tmp_script"
-
-    # Run as the new user, then clean up and exit (no exec — root cleans up)
-    su - "$new_user" -c "bash '$tmp_script'"
-    rm -f "$tmp_script"
+    echo -e "${BOLD}${GREEN}╔════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${GREEN}║        User '$new_user' is ready!              ║${NC}"
+    echo -e "${BOLD}${GREEN}╚════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${YELLOW}  Log out and log back in as '${BOLD}${new_user}${NC}${YELLOW}', then re-run this bootstrap:${NC}"
+    echo
+    echo -e "  ${BOLD}bash <(curl -fsSL https://raw.githubusercontent.com/<user>/dotfiles/master/bootstrap.sh)${NC}"
+    echo
+    echo -e "  ${BLUE}Or if the script is already on disk:${NC}"
+    echo -e "  ${BOLD}bash /path/to/bootstrap.sh${NC}"
+    echo
     exit 0
 }
 
@@ -491,35 +469,13 @@ offer_dotfiles_setup() {
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    local continue_as_user=false
-    if [ "$1" = "--continue-as-user" ]; then
-        continue_as_user=true
-        # Update DOTFILES_DIR for the new user's HOME
-        DOTFILES_DIR="$HOME/dotfiles"
-    fi
-
     print_header
-    show_plan "$continue_as_user"
+    show_plan
 
-    if ! $continue_as_user; then
-        detect_package_manager   # Step 1
-        install_prerequisites    # Step 2
-        install_extra_prerequisites  # Step 2b (sudo if root + openssh-server)
-        create_user_prompt       # Step 2c (root only, may re-exec)
-    else
-        info "Continuing bootstrap as $(whoami)..."
-        echo
-        # Validate sudo upfront so subsequent commands don't fail.
-        # sudo -v alone can fail in su sessions, so run a real command.
-        info "Verifying sudo access (you may be prompted for your password)..."
-        if sudo true; then
-            ok "sudo access confirmed"
-        else
-            warn "sudo authentication failed — installs requiring sudo may fail"
-        fi
-        echo
-        detect_package_manager   # Step 1 (re-detect for SUDO/INSTALL_CMD)
-    fi
+    detect_package_manager       # Step 1
+    install_prerequisites        # Step 2
+    install_extra_prerequisites  # Step 2b (sudo if root + openssh-server)
+    create_user_prompt           # Step 2c (root only, may exit)
 
     clone_dotfiles           # Step 3
     configure_git            # Step 4
