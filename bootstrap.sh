@@ -287,7 +287,10 @@ create_user_prompt() {
     } > "$tmp_script"
     chmod 755 "$tmp_script"
 
-    exec su - "$new_user" -c "bash '$tmp_script'; rm -f '$tmp_script'"
+    # Run as the new user, then clean up and exit (no exec — root cleans up)
+    su - "$new_user" -c "bash '$tmp_script'"
+    rm -f "$tmp_script"
+    exit 0
 }
 
 # ─── Step 3: Clone dotfiles repo ─────────────────────────────────────────────
@@ -506,9 +509,10 @@ main() {
     else
         info "Continuing bootstrap as $(whoami)..."
         echo
-        # Validate sudo upfront so subsequent commands don't fail
-        info "Verifying sudo access..."
-        if sudo -v; then
+        # Validate sudo upfront so subsequent commands don't fail.
+        # sudo -v alone can fail in su sessions, so run a real command.
+        info "Verifying sudo access (you may be prompted for your password)..."
+        if sudo true; then
             ok "sudo access confirmed"
         else
             warn "sudo authentication failed — installs requiring sudo may fail"
