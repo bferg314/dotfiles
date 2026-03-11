@@ -1,8 +1,10 @@
 
+
+
 # Starship
 # Link: https://starship.rs/guide/#%F0%9F%9A%80-installation
 # Chocolatey: choco install starship
-# Invoke-Expression (&starship init powershell)
+Invoke-Expression (&starship init powershell)
 
 # oh-my-posh
 # link: https://ohmyposh.dev/
@@ -10,8 +12,10 @@
 # default theme:
 # oh-my-posh init pwsh | Invoke-Expression
 # custom theme:
+
 Clear-Host
-Invoke-Expression (&oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/kali.omp.json")
+
+# Invoke-Expression (&oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/kali.omp.json")
 # lil help for missing venv visibility
 
 
