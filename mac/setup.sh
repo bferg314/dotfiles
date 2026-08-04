@@ -35,7 +35,8 @@ select opt in "${options[@]}"; do
 
         # Link other dotfiles
         ln -s -f "$REPO_ROOT/mac/vim/.vimrc" ~/.vimrc
-        ln -s -f "$REPO_ROOT/mac/tmux/.tmux.conf" ~/.tmux.conf
+        mkdir -p ~/.config/zellij
+        ln -s -f "$REPO_ROOT/mac/zellij/config.kdl" ~/.config/zellij/config.kdl
 
         # Configure .zshrc to source zshrc.d
         if ! grep -q "Source all files from zshrc.d directory" ~/.zshrc; then
@@ -149,9 +150,27 @@ fi' >> ~/.bashrc
         break
         ;;
     "Update")
-        git reset --hard HEAD
-        git clean -xffd
-        git pull
+        # Fast-forward first. Only fall back to a destructive reset if the user
+        # explicitly asks for it -- reset --hard + clean -xffd silently discards
+        # local edits and untracked files.
+        if git pull --ff-only; then
+            echo "✓ Updated to latest"
+        else
+            echo
+            echo -e "${YELLOW}Fast-forward failed - you have local commits or changes.${NC}"
+            git status --short
+            echo
+            echo -e "${RED}A hard reset will PERMANENTLY DISCARD everything listed above.${NC}"
+            read -p "Discard all local changes? (type 'yes' to confirm) " -r confirm
+            if [ "$confirm" = "yes" ]; then
+                git reset --hard HEAD
+                git clean -xffd
+                git pull
+                echo "✓ Reset and updated"
+            else
+                echo "Aborted. Repository left untouched."
+            fi
+        fi
         break
         ;;
     "Quit")

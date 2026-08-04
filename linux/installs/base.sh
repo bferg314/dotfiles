@@ -4,55 +4,13 @@
 
 set -e  # Exit on error
 
-# Color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo -e "${BOLD}${CYAN}=== Base Tools Installation ===${NC}"
 echo
 
-# Detect distribution and package manager
-if command -v pacman >/dev/null 2>&1; then
-    PKG_MANAGER="pacman"
-    DISTRO="arch"
-    INSTALL_CMD="sudo pacman -S --noconfirm"
-    UPDATE_CMD="sudo pacman -Sy"
-elif command -v dnf >/dev/null 2>&1; then
-    PKG_MANAGER="dnf"
-    INSTALL_CMD="sudo dnf install -y"
-    UPDATE_CMD="sudo dnf check-update || true"
-
-    # Detect if Fedora or AlmaLinux/RHEL
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
-            DISTRO="rhel"
-        else
-            DISTRO="fedora"
-        fi
-    else
-        DISTRO="fedora"  # Default to Fedora if can't detect
-    fi
-elif command -v apt-get >/dev/null 2>&1; then
-    PKG_MANAGER="apt"
-    DISTRO="debian"
-    INSTALL_CMD="sudo apt-get install -y"
-    UPDATE_CMD="sudo apt-get update"
-else
-    echo "Error: Unable to detect package manager (pacman, dnf, or apt)"
-    exit 1
-fi
-
-echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
-if [ "$PKG_MANAGER" = "dnf" ]; then
-    echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
-fi
-echo
+detect_distro
+make_tmpdir
 
 # Clean up any stale/conflicting Docker repo and keyring files before update
 if [ "$PKG_MANAGER" = "apt" ]; then
@@ -65,156 +23,134 @@ if [ "$PKG_MANAGER" = "apt" ]; then
 fi
 
 # Update package lists
-echo -e "${YELLOW}Updating package lists...${NC}"
-$UPDATE_CMD
+step "Updating package lists..."
+pkg_update
 echo
 
 # 1. Install Vim
-echo -e "${YELLOW}Installing vim...${NC}"
-if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD vim
-elif [ "$PKG_MANAGER" = "dnf" ]; then
-    $INSTALL_CMD vim-enhanced  # Enhanced vim without GUI dependencies
-elif [ "$PKG_MANAGER" = "apt" ]; then
-    $INSTALL_CMD vim
+step "Installing vim..."
+if [ "$PKG_MANAGER" = "dnf" ]; then
+    pkg_install vim-enhanced  # Enhanced vim without GUI dependencies
+else
+    pkg_install vim
 fi
-echo -e "${GREEN}✓ Vim installed${NC}"
+ok "Vim installed"
 echo
 
 # 2. Install Docker
-echo -e "${YELLOW}Installing Docker...${NC}"
+step "Installing Docker..."
 if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD docker docker-compose
-    sudo systemctl enable docker
-    sudo systemctl start docker
+    pkg_install docker docker-compose docker-buildx
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    $INSTALL_CMD dnf-plugins-core
     if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
         if [ "$DISTRO" = "rhel" ]; then
-            # AlmaLinux/RHEL use different Docker repository
-            sudo dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/rhel/docker-ce.repo
+            # AlmaLinux/RHEL use a different Docker repository
+            dnf_add_repo https://download.docker.com/linux/rhel/docker-ce.repo
         else
-            # Fedora
-            sudo dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
+            dnf_add_repo https://download.docker.com/linux/fedora/docker-ce.repo
         fi
     else
-        echo -e "${BLUE}Docker repository already configured${NC}"
+        info "Docker repository already configured"
     fi
-    $INSTALL_CMD docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    sudo systemctl enable docker
-    sudo systemctl start docker
+    pkg_install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 elif [ "$PKG_MANAGER" = "apt" ]; then
-    $INSTALL_CMD apt-transport-https ca-certificates curl gnupg lsb-release
-    # Detect debian vs ubuntu for correct docker repo
-    DOCKER_DISTRO="ubuntu"
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        if [[ "$ID" == "debian" ]] || [[ "$ID_LIKE" == *"debian"* && "$ID" != "ubuntu" ]]; then
-            DOCKER_DISTRO="debian"
-        fi
-    fi
+    pkg_install apt-transport-https ca-certificates curl gnupg lsb-release
+    # Docker publishes separate repos for debian and ubuntu
+    DOCKER_DISTRO="debian"
+    [ "$DISTRO" = "ubuntu" ] && DOCKER_DISTRO="ubuntu"
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL "https://download.docker.com/linux/${DOCKER_DISTRO}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     sudo chmod a+r /etc/apt/keyrings/docker.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_DISTRO} $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    $UPDATE_CMD
-    $INSTALL_CMD docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    sudo systemctl enable docker
-    sudo systemctl start docker
+    pkg_update
+    pkg_install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 
+sudo systemctl enable docker
+sudo systemctl start docker
+
 # Add current user to docker group
-if ! groups $USER | grep -q docker; then
-    sudo usermod -aG docker $USER
-    echo -e "${GREEN}✓ Docker installed and user added to docker group${NC}"
+if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+    sudo usermod -aG docker "$USER"
+    ok "Docker installed and user added to docker group"
     echo -e "${YELLOW}  NOTE: You need to log out and back in for docker group changes to take effect${NC}"
 else
-    echo -e "${GREEN}✓ Docker installed (user already in docker group)${NC}"
+    ok "Docker installed (user already in docker group)"
 fi
 echo
 
 # 3. Install zellij
-echo -e "${YELLOW}Installing zellij...${NC}"
+step "Installing zellij..."
 if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD zellij
+    pkg_install zellij
 else
-    ZELLIJ_VERSION=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-    rm -rf /tmp/zellij
-    curl -sL "https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp
-    sudo mv /tmp/zellij /usr/local/bin/zellij
+    ZELLIJ_ARCH="$(detect_arch)" || die "Unsupported architecture for the zellij binary release: $(uname -m)"
+    ZELLIJ_VERSION="$(github_latest_tag zellij-org/zellij)"
+    [ -n "$ZELLIJ_VERSION" ] || die "Could not determine the latest zellij release (GitHub API rate limit?)"
+    info "Installing zellij ${ZELLIJ_VERSION} (${ZELLIJ_ARCH})"
+    curl -fsSL "https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-${ZELLIJ_ARCH}-unknown-linux-musl.tar.gz" | tar -xz -C "$TMP_DIR"
+    sudo install -m 755 "$TMP_DIR/zellij" /usr/local/bin/zellij
 fi
-echo -e "${GREEN}✓ zellij installed${NC}"
+ok "zellij installed"
 echo
 
 # 4. Install Python3 and pip
-echo -e "${YELLOW}Installing Python3 and pip...${NC}"
+step "Installing Python3 and pip..."
 if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD python python-pip
-elif [ "$PKG_MANAGER" = "dnf" ]; then
-    $INSTALL_CMD python3 python3-pip
-elif [ "$PKG_MANAGER" = "apt" ]; then
-    $INSTALL_CMD python3 python3-pip
+    pkg_install python python-pip
+else
+    pkg_install python3 python3-pip
 fi
-echo -e "${GREEN}✓ Python3 and pip installed${NC}"
+ok "Python3 and pip installed"
 echo
 
 # 5. Install Node Version Manager (nvm) and LTS Node
-echo -e "${YELLOW}Installing Node Version Manager (nvm)...${NC}"
+step "Installing Node Version Manager (nvm)..."
 if [ ! -d "$HOME/.nvm" ]; then
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-
-    # Load nvm for current session
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    # Install LTS version of Node
-    echo -e "${YELLOW}Installing Node.js LTS...${NC}"
-    nvm install --lts
-    nvm use --lts
-    echo -e "${GREEN}✓ nvm and Node.js LTS installed${NC}"
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 else
-    echo -e "${GREEN}✓ nvm already installed${NC}"
-    # Load nvm and install/update LTS
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    echo -e "${YELLOW}Installing/updating Node.js LTS...${NC}"
+    ok "nvm already installed"
+fi
+
+export NVM_DIR="$HOME/.nvm"
+# nvm.sh returns non-zero in some paths; don't let errexit kill the script here
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    set +e
+    \. "$NVM_DIR/nvm.sh"
+    set -e
+fi
+
+if command -v nvm >/dev/null 2>&1; then
+    step "Installing/updating Node.js LTS..."
     nvm install --lts
     nvm use --lts
-    echo -e "${GREEN}✓ Node.js LTS updated${NC}"
+    ok "Node.js LTS installed"
+else
+    warn "nvm did not load in this shell; open a new shell and run 'nvm install --lts'"
 fi
 echo
 
 # 6. Install Development Tools
-echo -e "${YELLOW}Installing development tools...${NC}"
-if [ "$PKG_MANAGER" = "pacman" ]; then
-    sudo pacman -S --noconfirm base-devel
-elif [ "$PKG_MANAGER" = "dnf" ]; then
-    if [ "$DISTRO" = "rhel" ]; then
-        sudo dnf groupinstall -y "Development Tools"
-    else
-        sudo dnf install -y @development-tools
-    fi
-elif [ "$PKG_MANAGER" = "apt" ]; then
-    sudo apt-get install -y build-essential
-fi
-echo -e "${GREEN}✓ Development tools installed${NC}"
+step "Installing development tools..."
+pkg_install_devtools
+ok "Development tools installed"
 echo
 
 # 7. Install and configure Git
-echo -e "${YELLOW}Installing git...${NC}"
-$INSTALL_CMD git
-echo -e "${GREEN}✓ Git installed${NC}"
+step "Installing git..."
+pkg_install git
+ok "Git installed"
 echo
 
 # Configure git if not already configured
 if [ -z "$(git config --global user.name)" ]; then
-    read -p "$(echo -e ${CYAN}Enter your Git name: ${NC})" git_name
-    git config --global user.name "$git_name"
+    read -r -p "$(echo -e "${CYAN}Enter your Git name: ${NC}")" git_name
+    [ -n "$git_name" ] && git config --global user.name "$git_name"
 fi
 
 if [ -z "$(git config --global user.email)" ]; then
-    read -p "$(echo -e ${CYAN}Enter your Git email: ${NC})" git_email
-    git config --global user.email "$git_email"
+    read -r -p "$(echo -e "${CYAN}Enter your Git email: ${NC}")" git_email
+    [ -n "$git_email" ] && git config --global user.email "$git_email"
 fi
 
 echo -e "${BLUE}Git configured with:${NC}"

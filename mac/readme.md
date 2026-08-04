@@ -19,7 +19,7 @@ Configuration files and scripts for setting up a macOS development environment.
   - Git integration (fugitive, gitgutter)
 
 ### Terminal Multiplexer
-- **tmux/.tmux.conf**: tmux configuration with custom prefix and splits
+- **zellij/config.kdl**: zellij configuration (linked to `~/.config/zellij/config.kdl`)
 
 ## Installation
 
@@ -55,15 +55,15 @@ The setup script provides options to:
 - Package management helpers
 
 ### Terminal Multiplexing
-- Custom tmux prefix (Ctrl+A)
-- Easy window splitting
-- Informative status bar
+- zellij with rounded pane frames
+- Copy on select
+- 10k line scrollback
 
 ## Requirements
 - zsh
 - Git
 - Vim (optional)
-- tmux (optional)
+- zellij (optional)
 - Python (optional)
 
 ## Customization

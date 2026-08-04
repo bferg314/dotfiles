@@ -205,7 +205,7 @@ install_extra_prerequisites() {
         ok "${sshd_name} service is running"
     else
         info "Enabling and starting ${sshd_name}..."
-        systemctl enable --now "$sshd_name" 2>/dev/null || warn "Could not start ${sshd_name} (container?)"
+        $SUDO systemctl enable --now "$sshd_name" 2>/dev/null || warn "Could not start ${sshd_name} (container?)"
     fi
 
     sep

@@ -167,9 +167,29 @@ fi' >> ~/.zshrc
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
         BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
+
         git -C "$REPO_ROOT" fetch origin
-        git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
-        git -C "$REPO_ROOT" clean -ffd
+
+        # Fast-forward first. Only fall back to a destructive reset if the user
+        # explicitly asks for it -- reset --hard + clean -ffd silently discards
+        # local edits and untracked files.
+        if git -C "$REPO_ROOT" pull --ff-only origin "$BRANCH"; then
+            echo "✓ Updated to latest origin/$BRANCH"
+        else
+            echo
+            echo -e "${YELLOW}Fast-forward failed - you have local commits or changes.${NC}"
+            git -C "$REPO_ROOT" status --short
+            echo
+            echo -e "${RED}A hard reset will PERMANENTLY DISCARD everything listed above.${NC}"
+            read -p "Discard all local changes and match origin/$BRANCH? (type 'yes' to confirm) " -r confirm
+            if [ "$confirm" = "yes" ]; then
+                git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
+                git -C "$REPO_ROOT" clean -ffd
+                echo "✓ Reset to origin/$BRANCH"
+            else
+                echo "Aborted. Repository left untouched."
+            fi
+        fi
         ;;
     9)
         break

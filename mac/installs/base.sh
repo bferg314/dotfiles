@@ -58,10 +58,10 @@ else
 fi
 echo
 
-# 3. Install tmux
-echo -e "${YELLOW}Installing tmux...${NC}"
-brew install tmux
-echo -e "${GREEN}✓ tmux installed${NC}"
+# 3. Install zellij
+echo -e "${YELLOW}Installing zellij...${NC}"
+brew install zellij
+echo -e "${GREEN}✓ zellij installed${NC}"
 echo
 
 # 4. Install Python3 and pip (usually comes with macOS, but ensure latest)

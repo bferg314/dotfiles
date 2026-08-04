@@ -4,124 +4,107 @@
 
 set -e  # Exit on error
 
-# Color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 echo -e "${BOLD}${CYAN}=== Server Tools Installation ===${NC}"
 echo
 
-# Detect distribution and package manager
-if command -v pacman >/dev/null 2>&1; then
-    PKG_MANAGER="pacman"
-    DISTRO="arch"
-    INSTALL_CMD="sudo pacman -S --noconfirm"
-    UPDATE_CMD="sudo pacman -Sy"
-elif command -v dnf >/dev/null 2>&1; then
-    PKG_MANAGER="dnf"
-    INSTALL_CMD="sudo dnf install -y"
-    UPDATE_CMD="sudo dnf check-update || true"
+detect_distro
 
-    # Detect if Fedora or AlmaLinux/RHEL
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "rocky" ]]; then
-            DISTRO="rhel"
-        else
-            DISTRO="fedora"
-        fi
-    else
-        DISTRO="fedora"  # Default to Fedora if can't detect
-    fi
-elif command -v apt-get >/dev/null 2>&1; then
-    PKG_MANAGER="apt"
-    DISTRO="debian"
-    INSTALL_CMD="sudo apt-get install -y"
-    UPDATE_CMD="sudo apt-get update"
-else
-    echo "Error: Unable to detect package manager (pacman, dnf, or apt)"
-    exit 1
-fi
-
-echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
-if [ "$PKG_MANAGER" = "dnf" ]; then
-    echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
-fi
-echo
+# Debian/Ubuntu call the unit 'ssh', everyone else 'sshd'
+SSH_SERVICE="sshd"
+[ "$PKG_MANAGER" = "apt" ] && SSH_SERVICE="ssh"
 
 # Update package lists
-echo -e "${YELLOW}Updating package lists...${NC}"
-$UPDATE_CMD
+step "Updating package lists..."
+pkg_update
 echo
 
 # 1. Install and configure SSH Server
-echo -e "${YELLOW}Installing SSH Server...${NC}"
+step "Installing SSH Server..."
 if [ "$PKG_MANAGER" = "pacman" ]; then
-    $INSTALL_CMD openssh
-    sudo systemctl enable sshd
-    sudo systemctl start sshd
-elif [ "$PKG_MANAGER" = "dnf" ]; then
-    $INSTALL_CMD openssh-server
-    sudo systemctl enable sshd
-    sudo systemctl start sshd
-elif [ "$PKG_MANAGER" = "apt" ]; then
-    $INSTALL_CMD openssh-server
-    sudo systemctl enable ssh
-    sudo systemctl start ssh
+    pkg_install openssh
+else
+    pkg_install openssh-server
 fi
-echo -e "${GREEN}✓ SSH Server installed and enabled${NC}"
+sudo systemctl enable "$SSH_SERVICE"
+sudo systemctl start "$SSH_SERVICE"
+ok "SSH Server installed and enabled"
 echo
 
-# Configure SSH (optional enhancements)
-read -p "$(echo -e ${CYAN})Do you want to configure SSH for key-only authentication? (recommended for servers) (y/n) $(echo -e ${NC})" -n 1 -r
+# Configure SSH for key-only authentication (optional)
+read -r -p "$(echo -e "${CYAN}Do you want to configure SSH for key-only authentication? (recommended for servers) (y/n) ${NC}")" -n 1 reply
 echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Backup original config
-    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
-
-    # Disable password authentication
-    sudo sed -i 's/^#\?PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-    sudo sed -i 's/^#\?PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-
-    # Restart SSH service
-    if [ "$PKG_MANAGER" = "apt" ]; then
-        sudo systemctl restart ssh
-    else
-        sudo systemctl restart sshd
+if [[ $reply =~ ^[Yy]$ ]]; then
+    # Refuse to lock the machine out: without an authorized key, disabling
+    # password auth means nobody can log in over SSH at all.
+    if [ ! -s "$HOME/.ssh/authorized_keys" ]; then
+        warn "No keys found in ~/.ssh/authorized_keys."
+        warn "Disabling password authentication now would lock you out of SSH."
+        read -r -p "$(echo -e "${CYAN}Continue anyway? (y/n) ${NC}")" -n 1 force_reply
+        echo
+        [[ $force_reply =~ ^[Yy]$ ]] || die "Aborted SSH hardening. Add your public key first, then re-run."
     fi
 
-    echo -e "${GREEN}✓ SSH configured for key-only authentication${NC}"
-    echo -e "${YELLOW}  NOTE: Make sure you have added your public key to ~/.ssh/authorized_keys"
-    echo -e "        before closing this session, or you may lock yourself out!${NC}"
+    HARDENING_CONF="/etc/ssh/sshd_config.d/99-dotfiles-hardening.conf"
+    SSHD_BACKUP=""
+
+    # Modern sshd_config pulls in sshd_config.d/*.conf, and distro-shipped
+    # drop-ins (e.g. Ubuntu's 50-cloud-init.conf) override the main file.
+    # Editing only the main file leaves password auth silently enabled, so
+    # write a high-numbered drop-in when Include is present.
+    if grep -qE '^\s*Include\s+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config; then
+        sudo install -d -m 755 /etc/ssh/sshd_config.d
+        sudo tee "$HARDENING_CONF" > /dev/null <<'EOF'
+# Managed by dotfiles/linux/installs/server.sh
+PasswordAuthentication no
+PubkeyAuthentication yes
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+EOF
+        sudo chmod 644 "$HARDENING_CONF"
+        info "Wrote ${HARDENING_CONF}"
+    else
+        SSHD_BACKUP="/etc/ssh/sshd_config.backup.$(date +%Y%m%d%H%M%S)"
+        sudo cp /etc/ssh/sshd_config "$SSHD_BACKUP"
+        # Match the directive whether it is commented, set to yes, or set to no
+        sudo sed -i -E 's/^[#[:space:]]*PasswordAuthentication[[:space:]]+.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+        sudo sed -i -E 's/^[#[:space:]]*PubkeyAuthentication[[:space:]]+.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+        grep -qE '^PasswordAuthentication no' /etc/ssh/sshd_config ||
+            echo "PasswordAuthentication no" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+        grep -qE '^PubkeyAuthentication yes' /etc/ssh/sshd_config ||
+            echo "PubkeyAuthentication yes" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+        info "Updated /etc/ssh/sshd_config (backup: ${SSHD_BACKUP})"
+    fi
+
+    # Validate before restarting, so a bad config cannot take sshd down
+    if sudo sshd -t; then
+        sudo systemctl restart "$SSH_SERVICE"
+        ok "SSH configured for key-only authentication"
+        echo -e "${YELLOW}  NOTE: Keep this session open and verify you can log in from"
+        echo -e "        another terminal before disconnecting!${NC}"
+    else
+        if [ -n "$SSHD_BACKUP" ]; then
+            sudo cp "$SSHD_BACKUP" /etc/ssh/sshd_config
+        else
+            sudo rm -f "$HARDENING_CONF"
+        fi
+        die "sshd config test failed; changes reverted and sshd left running"
+    fi
 fi
 echo
 
 # Optional: Install additional server utilities
-read -p "$(echo -e ${CYAN})Install additional server monitoring tools? (htop, ncdu, net-tools) (y/n) $(echo -e ${NC})" -n 1 -r
+read -r -p "$(echo -e "${CYAN}Install additional server monitoring tools? (htop, ncdu, net-tools) (y/n) ${NC}")" -n 1 reply
 echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}Installing monitoring tools...${NC}"
-    if [ "$PKG_MANAGER" = "pacman" ]; then
-        $INSTALL_CMD htop ncdu net-tools
-    elif [ "$PKG_MANAGER" = "dnf" ]; then
-        $INSTALL_CMD htop ncdu net-tools
-    elif [ "$PKG_MANAGER" = "apt" ]; then
-        $INSTALL_CMD htop ncdu net-tools
-    fi
-    echo -e "${GREEN}✓ Monitoring tools installed${NC}"
+if [[ $reply =~ ^[Yy]$ ]]; then
+    step "Installing monitoring tools..."
+    pkg_install htop ncdu net-tools
+    ok "Monitoring tools installed"
 fi
 echo
 
 echo -e "${BOLD}${GREEN}=== Server Tools Installation Complete ===${NC}"
 echo
 echo -e "${BLUE}SSH Server Status:${NC}"
-if [ "$PKG_MANAGER" = "apt" ]; then
-    sudo systemctl status ssh --no-pager | head -n 3
-else
-    sudo systemctl status sshd --no-pager | head -n 3
-fi
+sudo systemctl status "$SSH_SERVICE" --no-pager | head -n 3
