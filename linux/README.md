@@ -79,12 +79,16 @@ ed25519 SSH key, and appends a pasted public key to `~/.ssh/authorized_keys`.
 | Node | nvm `v0.40.1` installer + `nvm install --lts` | same | same | same |
 | Dev tools | `base-devel` | `@development-tools` | `groupinstall "Development Tools"` | `build-essential` |
 | Git | `git` | `git` | `git` | `git` |
+| GitHub CLI | `github-cli` | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's apt repo) |
 
 Additional actions:
 - **Docker repo setup** — Fedora/RHEL: adds `docker-ce.repo` via `dnf config-manager`, handling both dnf4 (`--add-repo`) and dnf5 (`addrepo --from-repofile=`) syntax. Debian/Ubuntu: installs `apt-transport-https ca-certificates curl gnupg lsb-release`, removes stale `docker.list`/`docker.sources` and old keyrings, then adds Docker's key to `/etc/apt/keyrings/docker.gpg` and the repo for the correct `ubuntu`/`debian` path.
 - Enables and starts the `docker` service, and adds the current user to the `docker` group (requires re-login).
 - The zellij binary is selected by architecture (`x86_64` or `aarch64`); other architectures fail with a clear message rather than installing the wrong binary.
 - Prompts for git `user.name` / `user.email` if not already set globally.
+- The GitHub CLI comes from GitHub's own repo on dnf/apt rather than the distro
+  repos, which lag. It is installed but not authenticated — run `gh auth login`
+  yourself.
 
 ---
 

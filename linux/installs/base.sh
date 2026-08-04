@@ -158,7 +158,35 @@ echo -e "  ${BOLD}Name:${NC} $(git config --global user.name)"
 echo -e "  ${BOLD}Email:${NC} $(git config --global user.email)"
 echo
 
+# 8. Install GitHub CLI
+step "Installing GitHub CLI..."
+if [ "$PKG_MANAGER" = "pacman" ]; then
+    pkg_install github-cli
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    # GitHub's own repo carries current versions for both Fedora and RHEL-based
+    if [ ! -f /etc/yum.repos.d/gh-cli.repo ]; then
+        dnf_add_repo https://cli.github.com/packages/rpm/gh-cli.repo
+    else
+        info "GitHub CLI repository already configured"
+    fi
+    pkg_install gh
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    sudo install -m 0755 -d /etc/apt/keyrings
+    # This file is already a binary keyring, so it does not need --dearmor
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg |
+        sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+    sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" |
+        sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+    pkg_update
+    pkg_install gh
+fi
+ok "GitHub CLI installed ($(gh --version 2>/dev/null | head -n1))"
+echo
+
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
 echo
 echo -e "${YELLOW}IMPORTANT: If this is your first time installing Docker, you need to"
 echo -e "log out and log back in for the docker group changes to take effect.${NC}"
+echo
+echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"

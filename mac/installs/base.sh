@@ -130,7 +130,15 @@ echo -e "  ${BOLD}Name:${NC} $(git config --global user.name)"
 echo -e "  ${BOLD}Email:${NC} $(git config --global user.email)"
 echo
 
+# 8. Install GitHub CLI
+echo -e "${YELLOW}Installing GitHub CLI...${NC}"
+brew install gh
+echo -e "${GREEN}✓ GitHub CLI installed${NC}"
+echo
+
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
 echo
 echo -e "${YELLOW}IMPORTANT: If Docker Desktop was just installed, open it from Applications"
 echo -e "to complete the setup and grant necessary permissions.${NC}"
+echo
+echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
