@@ -1,143 +1,100 @@
-# Base installation script for Windows
-# Installs core development tools and utilities using Chocolatey
+﻿# Base installation script for Windows
+# Installs core development tools and utilities using winget
 # Requires Administrator privileges
+#
+# The counterpart to linux/installs/base.sh.
 
-# Check for admin privileges
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$ErrorActionPreference = 'Stop'
 
-if (-not $isAdmin) {
-    Write-Host ""
-    Write-Host "ERROR: This script requires Administrator privileges." -ForegroundColor Red
-    Write-Host "Please run PowerShell as Administrator and try again." -ForegroundColor Yellow
-    Write-Host ""
-    exit 1
-}
+. "$PSScriptRoot\..\common.ps1"
 
-# Color helper functions
-function Write-Header {
-    param([string]$Text)
-    Write-Host ""
-    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host " $Text" -ForegroundColor Cyan
-    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
-}
-
-function Write-Success {
-    param([string]$Text)
-    Write-Host "✓ $Text" -ForegroundColor Green
-}
-
-function Write-Info {
-    param([string]$Text)
-    Write-Host "$Text" -ForegroundColor Blue
-}
-
-function Write-Warning {
-    param([string]$Text)
-    Write-Host "$Text" -ForegroundColor Yellow
-}
-
-function Write-Error {
-    param([string]$Text)
-    Write-Host "✗ $Text" -ForegroundColor Red
-}
-
+Assert-Admin
 Write-Header "Base Tools Installation"
+Assert-Winget
+Reset-PackageFailures
 
-# 1. Ensure Chocolatey is installed
-Write-Info "Checking for Chocolatey..."
-if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
-    Write-Warning "Chocolatey not found. Installing Chocolatey..."
-    Set-ExecutionPolicy Bypass -Scope Process -Force
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-    Write-Success "Chocolatey installed"
+# ─── Git ──────────────────────────────────────────────────────────────────────
+
+Install-Package -Id 'Git.Git' -Name 'Git' | Out-Null
+
+# winget's PATH changes do not reach the running process, so git may not be
+# callable yet on a first run. Pick it up from its known install location.
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    $gitBin = "$env:ProgramFiles\Git\cmd"
+    if (Test-Path -LiteralPath $gitBin) { $env:Path = "$env:Path;$gitBin" }
+}
+
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    # Matches the interactive identity prompt in linux/installs/base.sh, and is
+    # skipped entirely when both values are already set.
+    $gitName = git config --global user.name
+    $gitEmail = git config --global user.email
+
+    if ([string]::IsNullOrWhiteSpace($gitName)) {
+        $name = Read-Host "Enter your Git name"
+        if (-not [string]::IsNullOrWhiteSpace($name)) { git config --global user.name "$name" }
+    }
+    if ([string]::IsNullOrWhiteSpace($gitEmail)) {
+        $email = Read-Host "Enter your Git email"
+        if (-not [string]::IsNullOrWhiteSpace($email)) { git config --global user.email "$email" }
+    }
+
+    Write-Info "Git identity: $(git config --global user.name) <$(git config --global user.email)>"
 } else {
-    Write-Success "Chocolatey is already installed"
+    Write-Warn "git is not on PATH yet - open a new shell to configure your identity."
 }
 Write-Host ""
 
-# 2. Install Git
-Write-Info "Installing Git..."
-choco install git -y
-refreshenv
-Write-Success "Git installed"
+# ─── Core tooling ─────────────────────────────────────────────────────────────
+
+Install-Package -Id 'GitHub.cli'          -Name 'GitHub CLI'     | Out-Null
+Install-Package -Id 'vim.vim'             -Name 'Vim'            | Out-Null
+Install-Package -Id 'Python.Python.3.13'  -Name 'Python 3.13'    | Out-Null
+Install-Package -Id 'OpenJS.NodeJS.LTS'   -Name 'Node.js LTS'    | Out-Null
+Install-Package -Id 'Docker.DockerDesktop' -Name 'Docker Desktop' | Out-Null
 Write-Host ""
 
-# Configure git if not already configured
-$gitName = git config --global user.name
-$gitEmail = git config --global user.email
+# ─── Prompt and terminal ──────────────────────────────────────────────────────
+#
+# windows/posh.d/zprompt.ps1 initialises starship on every shell start, so
+# without this the prompt errors on a fresh machine. The Nerd Font supplies the
+# glyphs that the starship, wezterm and vim-airline configs all assume.
 
-if ([string]::IsNullOrEmpty($gitName)) {
-    $name = Read-Host "Enter your Git name"
-    git config --global user.name "$name"
-}
-
-if ([string]::IsNullOrEmpty($gitEmail)) {
-    $email = Read-Host "Enter your Git email"
-    git config --global user.email "$email"
-}
-
-Write-Info "Git configured with:"
-Write-Host "  Name:  $(git config --global user.name)"
-Write-Host "  Email: $(git config --global user.email)"
+Install-Package -Id 'Starship.Starship'             -Name 'starship'                | Out-Null
+Install-Package -Id 'DEVCOM.JetBrainsMonoNerdFont'  -Name 'JetBrainsMono Nerd Font' | Out-Null
+Install-Package -Id 'wez.wezterm'                   -Name 'WezTerm'                 | Out-Null
+Install-Package -Id 'AutoHotkey.AutoHotkey'         -Name 'AutoHotkey'              | Out-Null
 Write-Host ""
 
-# 3. Install GitHub CLI
-Write-Info "Installing GitHub CLI..."
-choco install gh -y
-refreshenv
-Write-Success "GitHub CLI installed"
+# No zellij: it has no native Windows support, so there is deliberately no
+# counterpart to the zellij section of linux/installs/base.sh.
+
+# ─── Build tools ──────────────────────────────────────────────────────────────
+#
+# The build-essential equivalent. The C++ workload has to be requested through
+# --override, since the base package installs the shell only.
+
+Install-Package -Id 'Microsoft.VisualStudio.2022.BuildTools' -Name 'VS Build Tools' -ExtraArgs @(
+    '--override',
+    '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
+) | Out-Null
 Write-Host ""
 
-# 4. Install Vim
-Write-Info "Installing Vim..."
-choco install vim -y
-Write-Success "Vim installed"
-Write-Host ""
+# ─── Additional utilities ─────────────────────────────────────────────────────
+# curl is omitted: curl.exe ships with Windows 10 1803+.
 
-# 5. Install Docker Desktop
-Write-Info "Installing Docker Desktop..."
-choco install docker-desktop -y
-Write-Success "Docker Desktop installed"
-Write-Warning "NOTE: Docker Desktop requires a restart to complete installation"
-Write-Host ""
-
-# 6. Install Python
-Write-Info "Installing Python..."
-choco install python -y
-refreshenv
-Write-Success "Python installed"
-Write-Host ""
-
-# 7. Install Node.js LTS
-Write-Info "Installing Node.js LTS..."
-choco install nodejs-lts -y
-refreshenv
-Write-Success "Node.js LTS installed"
-Write-Host ""
-
-# 8. Install Visual Studio Build Tools (equivalent to build-essential)
-Write-Info "Installing Visual Studio Build Tools..."
-choco install visualstudio2022buildtools -y
-choco install visualstudio2022-workload-vctools -y
-Write-Success "Visual Studio Build Tools installed"
-Write-Host ""
-
-# 9. Install common development tools
-Write-Info "Installing additional development tools..."
-choco install 7zip -y
-choco install wget -y
-choco install curl -y
-choco install jq -y
-Write-Success "Additional tools installed"
+Install-Package -Id '7zip.7zip'            -Name '7-Zip' | Out-Null
+Install-Package -Id 'jqlang.jq'            -Name 'jq'    | Out-Null
+Install-Package -Id 'JernejSimoncic.Wget'  -Name 'wget'  | Out-Null
 Write-Host ""
 
 Write-Header "Base Tools Installation Complete"
-Write-Host ""
-Write-Warning "IMPORTANT: Some installations may require a system restart to take effect."
-Write-Warning "Particularly Docker Desktop and Visual Studio Build Tools."
-Write-Host ""
+
+$ok = Show-PackageFailures
+
+Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build Tools in particular."
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
+Write-Info "Set your terminal font to 'JetBrainsMono Nerd Font' so prompt glyphs render."
 Write-Host ""
+
+if (-not $ok) { exit 1 }

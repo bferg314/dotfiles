@@ -21,22 +21,73 @@ This directory contains configuration files and scripts for setting up a Windows
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
 
+### WezTerm (`wezterm/`)
+- **.wezterm.lua**: Terminal configuration — launches `pwsh`, JetBrainsMono Nerd Font
+
+### Shared helpers (`common.ps1`)
+Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`, and the privilege
+checks. Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
+`linux/installs/common.sh`.
+
 ## Installation
 
 1. Clone this repository:
 ```powershell
-git clone https://github.com/yourusername/dotfiles.git
+git clone https://github.com/bferg314/dotfiles.git
 ```
 
 2. Run the setup script:
 ```powershell
-.\setup.ps1
+.\windows\setup.ps1
 ```
 
-This will:
-- Create PowerShell profile if it doesn't exist
-- Add the necessary source lines to your profile
-- Set up automatic loading of all scripts in `posh.d`
+### Menu options
+
+| Option | What it does |
+|---|---|
+| 1. Create Links | Links every config below and configures both PowerShell profiles |
+| 2. Install vim-plug | Downloads `plug.vim` for vim and Neovim |
+| 3. Install PowerShell 7 | Installs `pwsh` and configures its profile |
+| 4. Install Base Tools | Core dev tooling — **needs Administrator** |
+| 5. Install Desktop Apps | GUI applications — **needs Administrator** |
+| 6. Install Server Tools | OpenSSH server + optional key-only hardening — **needs Administrator** |
+| 7. Update | Fast-forwards the repo; a destructive reset requires typing `yes` |
+
+Every option is idempotent — re-running it is safe and will report what is already in place.
+
+### What gets linked
+
+| Source | Target |
+|---|---|
+| `windows/vim/.vimrc` | `~\_vimrc` |
+| `windows/wezterm/.wezterm.lua` | `~\.wezterm.lua` |
+| `starship/tokyo.toml` | `~\.config\starship.toml` |
+| `windows/ahk/WindowsShortcuts.ahk` | Startup folder |
+| `windows/posh.d/*.ps1` | Sourced from both PowerShell profiles |
+
+The `posh.d` block is written to the **AllHosts** profile for both Windows PowerShell 5.1
+(`Documents\WindowsPowerShell\profile.ps1`) and PowerShell 7 (`Documents\PowerShell\profile.ps1`),
+so it also loads in the VS Code terminal. The block is delimited by
+`# >>> dotfiles posh.d >>>` markers and is rewritten in place on every run, so moving the repo and
+re-running option 1 fixes the paths.
+
+### Symlinks and privileges
+
+Windows only permits unprivileged symlink creation when **Developer Mode** is enabled
+(Settings → System → For developers). Without it, `Create Links` falls back to a hard link, and
+failing that to a plain copy — which will *not* track future repo changes. Enable Developer Mode or
+run the setup script as Administrator to get real symlinks.
+
+Any pre-existing real file at a link target is backed up to `<name>.bak-<timestamp>` before being
+replaced.
+
+## Packages
+
+Installs use **winget**, which ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
+Chocolatey is no longer used. Package IDs live in `installs/base.ps1` and `installs/desktop.ps1`.
+
+There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local` mDNS names natively.
+There is no zellij option either — zellij has no native Windows support.
 
 ## Usage
 
@@ -64,10 +115,10 @@ This will:
 
 ### Requirements
 - PowerShell 5.1 or higher
-- Git
-- Python (optional)
-- Vim (optional)
-- AutoHotkey v2 (optional)
+- winget (App Installer) — for the install options
+- Developer Mode or Administrator — for real symlinks
+
+Git, Python, Vim, starship, WezTerm and AutoHotkey are all installed by `Install Base Tools`.
 
 ## Customization
 

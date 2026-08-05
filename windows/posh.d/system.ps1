@@ -1,4 +1,4 @@
-# System information functions
+﻿# System information functions
 function sysinfo {
     # Get Operating System Information
     $os = Get-WmiObject -Class Win32_OperatingSystem

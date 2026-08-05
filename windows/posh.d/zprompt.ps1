@@ -1,10 +1,16 @@
-
+﻿
 
 
 # Starship
 # Link: https://starship.rs/guide/#%F0%9F%9A%80-installation
-# Chocolatey: choco install starship
-Invoke-Expression (&starship init powershell)
+# Installed by windows/installs/base.ps1: winget install --id Starship.Starship
+#
+# Guarded so a machine that has not run the base install yet gets a plain
+# prompt instead of a "term 'starship' is not recognized" error on every
+# single shell start.
+if (Get-Command starship -ErrorAction SilentlyContinue) {
+    Invoke-Expression (&starship init powershell)
+}
 
 # oh-my-posh
 # link: https://ohmyposh.dev/

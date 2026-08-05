@@ -14,7 +14,9 @@ Set-Alias ll Get-ChildItem
 
 # Directory listing with colors
 function ls_color { Get-ChildItem | Format-Wide -AutoSize | Out-Host }
-Set-Alias ls ls_color
+# ls ships as an AllScope alias in Windows PowerShell 5.1, and overriding it
+# without -Force -Option AllScope errors on every shell start.
+Set-Alias ls ls_color -Force -Option AllScope
 
 # Quick edits
 function Edit-Profile { code $PROFILE }
@@ -26,4 +28,4 @@ function Get-MyIP { (Invoke-WebRequest -Uri "https://ifconfig.me/ip").Content }
 # Create Unix-like aliases for PowerShell commands
 Set-Alias grep Select-String
 Set-Alias which Get-Command
-Set-Alias cat Get-Content
+Set-Alias cat Get-Content -Force -Option AllScope
