@@ -36,8 +36,15 @@ This will:
 5. Add a public SSH key so you can remote in without a password
 
 ### Windows
-- Run `windows/setup.ps1` to configure PowerShell environment
-- See [Windows Setup Guide](windows/README.md) for detailed instructions
+
+```powershell
+git clone https://github.com/bferg314/dotfiles.git
+.\dotfiles\windows\setup.ps1
+```
+
+A menu that mirrors the Linux one: link configs, install tooling via winget, set up an SSH server,
+and update the repo. See the [Windows Setup Guide](windows/README.md) for the full option list, what
+gets linked where, and the Developer Mode requirement for symlinks.
 
 ### Linux (existing machine)
 - Source the required `.bashrc` files
@@ -55,9 +62,8 @@ This will:
 
 ### Windows
 - PowerShell 5.1 or higher
-- Git
-- Python (optional)
-- AutoHotkey v2 (optional)
+- winget (App Installer), for the install options
+- Developer Mode or Administrator, for real symlinks
 
 ### Linux
 - Bash
