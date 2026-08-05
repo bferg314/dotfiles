@@ -94,6 +94,12 @@ fi
 ok "zellij installed"
 echo
 
+# 3b. Install the terminal font
+# set -e is active, and a missing font should not abort the whole base install.
+install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono' || \
+    warn "Continuing without the font; prompt glyphs will not render."
+echo
+
 # 4. Install Python3 and pip
 step "Installing Python3 and pip..."
 if [ "$PKG_MANAGER" = "pacman" ]; then

@@ -75,6 +75,7 @@ ed25519 SSH key, and appends a pasted public key to `~/.ssh/authorized_keys`.
 | Vim | `vim` | `vim-enhanced` | `vim-enhanced` | `vim` |
 | Docker | `docker`, `docker-compose`, `docker-buildx` | `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin` (Docker's Fedora repo) | same packages, Docker's RHEL repo | `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin` (Docker's apt repo) |
 | Zellij | `zellij` | latest GitHub release binary → `/usr/local/bin/zellij` | same | same |
+| Font | latest Nerd Fonts release → `~/.local/share/fonts/FiraCode` | same | same | same |
 | Python | `python`, `python-pip` | `python3`, `python3-pip` | `python3`, `python3-pip` | `python3`, `python3-pip` |
 | Node | nvm `v0.40.1` installer + `nvm install --lts` | same | same | same |
 | Dev tools | `base-devel` | `@development-tools` | `groupinstall "Development Tools"` | `build-essential` |
@@ -85,6 +86,7 @@ Additional actions:
 - **Docker repo setup** — Fedora/RHEL: adds `docker-ce.repo` via `dnf config-manager`, handling both dnf4 (`--add-repo`) and dnf5 (`addrepo --from-repofile=`) syntax. Debian/Ubuntu: installs `apt-transport-https ca-certificates curl gnupg lsb-release`, removes stale `docker.list`/`docker.sources` and old keyrings, then adds Docker's key to `/etc/apt/keyrings/docker.gpg` and the repo for the correct `ubuntu`/`debian` path.
 - Enables and starts the `docker` service, and adds the current user to the `docker` group (requires re-login).
 - The zellij binary is selected by architecture (`x86_64` or `aarch64`); other architectures fail with a clear message rather than installing the wrong binary.
+- **FiraCode Nerd Font Mono** is installed per-user from the [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release rather than from the distro repos, which package the Nerd variants inconsistently (Arch has `ttf-firacode-nerd`; Fedora and Debian ship only non-Nerd Fira Code). Pulling the release directly also means every machine — Linux, macOS and Windows — lands on the same version. Only the `Mono` faces are copied; `fc-cache -f` refreshes the font list. A font failure warns rather than aborting the base install.
 - Prompts for git `user.name` / `user.email` if not already set globally.
 - The GitHub CLI comes from GitHub's own repo on dnf/apt rather than the distro
   repos, which lag. It is installed but not authenticated — run `gh auth login`
@@ -183,13 +185,20 @@ frames, copy-on-select, and a 10k-line scrollback.
 ### Shared helpers (`installs/common.sh`)
 Sourced by every install script. Provides distro detection, the `pkg_install` /
 `pkg_update` wrappers, Flatpak and AUR-helper bootstrapping, temp-directory
-handling, and architecture detection.
+handling, architecture detection, and `install_nerd_font`.
+
+## Font
+
+The terminal font is **FiraCode Nerd Font Mono** at size 16, the same on every platform. The starship
+prompt and vim-airline both draw glyphs that only a Nerd Font provides. `installs/base.sh` installs it;
+point your terminal emulator at it afterwards.
 
 ## Requirements
 - Bash 4.0+
 - Git
 - `sudo` access (all install scripts use it)
-- `curl` (used for nvm, zellij, and repo keys)
+- `curl` (used for nvm, zellij, the font, and repo keys)
+- `fontconfig` for `fc-cache` (the font install warns and continues without it)
 
 ## Customization
 

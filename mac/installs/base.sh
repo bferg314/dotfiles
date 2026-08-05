@@ -64,6 +64,36 @@ brew install zellij
 echo -e "${GREEN}✓ zellij installed${NC}"
 echo
 
+# 3b. Install the terminal font
+#
+# Homebrew has font-fira-code-nerd-font, but this pulls the same GitHub release
+# that the Linux and Windows installers use so every machine ends up on an
+# identical version. Only the Mono variant is installed; the archive also
+# carries the proportional and non-Mono families.
+echo -e "${YELLOW}Installing FiraCode Nerd Font Mono...${NC}"
+FONT_DIR="$HOME/Library/Fonts"
+if ls "$FONT_DIR"/FiraCodeNerdFontMono-*.ttf >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ FiraCode Nerd Font Mono already installed${NC}"
+else
+    FONT_TAG="$(curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest |
+        grep '"tag_name"' | head -n1 | cut -d'"' -f4)"
+    if [ -z "$FONT_TAG" ]; then
+        echo -e "${YELLOW}⚠ Could not determine the latest nerd-fonts release; skipping font${NC}"
+    else
+        FONT_TMP="$(mktemp -d)"
+        if curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_TAG}/FiraCode.tar.xz" |
+                tar -xJ -C "$FONT_TMP"; then
+            mkdir -p "$FONT_DIR"
+            cp "$FONT_TMP"/FiraCodeNerdFontMono-*.ttf "$FONT_DIR/"
+            echo -e "${GREEN}✓ FiraCode Nerd Font Mono installed (${FONT_TAG})${NC}"
+        else
+            echo -e "${YELLOW}⚠ Failed to download the font; prompt glyphs will not render${NC}"
+        fi
+        rm -rf "$FONT_TMP"
+    fi
+fi
+echo
+
 # 4. Install Python3 and pip (usually comes with macOS, but ensure latest)
 echo -e "${YELLOW}Installing Python3...${NC}"
 brew install python3

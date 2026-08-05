@@ -54,6 +54,8 @@ gets linked where, and the Developer Mode requirement for symlinks.
 
 - Cross-platform Python development environment
 - Consistent shell aliases across operating systems
+- One terminal font everywhere — FiraCode Nerd Font Mono at 16, installed from the
+  same [nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release on all three platforms
 - Automated setup scripts
 - Version control integration
 - Productivity shortcuts and utilities

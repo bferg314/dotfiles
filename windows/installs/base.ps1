@@ -60,10 +60,16 @@ Write-Host ""
 # without this the prompt errors on a fresh machine. The Nerd Font supplies the
 # glyphs that the starship, wezterm and vim-airline configs all assume.
 
-Install-Package -Id 'Starship.Starship'             -Name 'starship'                | Out-Null
-Install-Package -Id 'DEVCOM.JetBrainsMonoNerdFont'  -Name 'JetBrainsMono Nerd Font' | Out-Null
-Install-Package -Id 'wez.wezterm'                   -Name 'WezTerm'                 | Out-Null
-Install-Package -Id 'AutoHotkey.AutoHotkey'         -Name 'AutoHotkey'              | Out-Null
+Install-Package -Id 'Starship.Starship'     -Name 'starship'   | Out-Null
+Install-Package -Id 'wez.wezterm'           -Name 'WezTerm'    | Out-Null
+Install-Package -Id 'AutoHotkey.AutoHotkey' -Name 'AutoHotkey' | Out-Null
+
+# Not available through winget - see Install-NerdFont in common.ps1.
+if (-not (Install-NerdFont -Archive 'FiraCode' `
+                           -FilePattern 'FiraCodeNerdFontMono-*.ttf' `
+                           -Name 'FiraCode Nerd Font Mono')) {
+    $global:DotfilesFailedPackages += 'FiraCode Nerd Font Mono'
+}
 Write-Host ""
 
 # No zellij: it has no native Windows support, so there is deliberately no
@@ -94,7 +100,7 @@ $ok = Show-PackageFailures
 
 Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build Tools in particular."
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
-Write-Info "Set your terminal font to 'JetBrainsMono Nerd Font' so prompt glyphs render."
+Write-Info "Set your terminal font to 'FiraCode Nerd Font Mono' so prompt glyphs render."
 Write-Host ""
 
 if (-not $ok) { exit 1 }

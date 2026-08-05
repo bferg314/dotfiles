@@ -6,13 +6,10 @@ local config = wezterm.config_builder()
 config.default_prog = { 'pwsh.exe', '-NoLogo' }
 
 -- Font. The Nerd Font variant supplies the glyphs the starship prompt and
--- vim-airline draw; windows/installs/base.ps1 installs it.
-config.font = wezterm.font_with_fallback {
-  'JetBrainsMono Nerd Font',
-  'JetBrains Mono',
-  'Consolas',
-}
-config.font_size = 14.0
+-- vim-airline draw. Installed by the "Install Base Tools" option on every
+-- platform. No fallback list: this is the one font, everywhere.
+config.font = wezterm.font 'FiraCode Nerd Font Mono'
+config.font_size = 16.0
 
 -- Mouse behavior
 config.mouse_bindings = {

@@ -265,6 +265,92 @@ function Get-GitHubLatestTag {
     }
 }
 
+# ─── Fonts ────────────────────────────────────────────────────────────────────
+
+# Install a Nerd Font from the upstream GitHub release.
+#
+# winget carries exactly one Nerd Font (DEVCOM.JetBrainsMonoNerdFont), so
+# anything else has to come from ryanoasis/nerd-fonts directly. This is the
+# same "not in the package repos, fetch the release" approach that
+# linux/installs/base.sh uses for zellij.
+#
+# Installs per-user (LOCALAPPDATA + HKCU), which needs no elevation.
+function Install-NerdFont {
+    param(
+        # Release asset base name, e.g. FiraCode -> FiraCode.zip
+        [Parameter(Mandatory)][string]$Archive,
+        # Only files matching this are installed, so the Mono variant does not
+        # drag in the proportional and non-Mono families alongside it.
+        [Parameter(Mandatory)][string]$FilePattern,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    Write-Step "Installing $Name..."
+
+    $fontDir = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
+    $registry = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+
+    if ((Test-Path -LiteralPath $fontDir) -and
+        (Get-ChildItem -LiteralPath $fontDir -Filter $FilePattern -ErrorAction SilentlyContinue)) {
+        Write-Ok "$Name already installed"
+        return $true
+    }
+
+    $tag = Get-GitHubLatestTag -Repo 'ryanoasis/nerd-fonts'
+    if (-not $tag) {
+        Write-Fail "Could not determine the latest nerd-fonts release (GitHub API rate limit?)"
+        return $false
+    }
+    Write-Info "nerd-fonts $tag"
+
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "nerdfont-$([System.IO.Path]::GetRandomFileName())"
+    New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+
+    try {
+        $zip = Join-Path $tmp "$Archive.zip"
+        Get-FileFromWeb -Uri "https://github.com/ryanoasis/nerd-fonts/releases/download/$tag/$Archive.zip" `
+                        -OutFile $zip
+
+        $extract = Join-Path $tmp 'extract'
+        # Expand-Archive rather than a COM shell call: no UI, and it is present
+        # in PowerShell 5.1 without any module install.
+        Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+
+        $fonts = Get-ChildItem -LiteralPath $extract -Filter $FilePattern
+        if (-not $fonts) {
+            Write-Fail "No files matching $FilePattern in $Archive.zip"
+            return $false
+        }
+
+        if (-not (Test-Path -LiteralPath $fontDir)) {
+            New-Item -ItemType Directory -Path $fontDir -Force | Out-Null
+        }
+        if (-not (Test-Path -LiteralPath $registry)) {
+            New-Item -Path $registry -Force | Out-Null
+        }
+
+        foreach ($font in $fonts) {
+            $dest = Join-Path $fontDir $font.Name
+            Copy-Item -LiteralPath $font.FullName -Destination $dest -Force
+
+            # A per-user font is only visible to applications once it is
+            # registered, and the value must hold the full path (machine-wide
+            # entries under HKLM use the bare filename instead).
+            $face = [System.IO.Path]::GetFileNameWithoutExtension($font.Name)
+            New-ItemProperty -Path $registry -Name "$face (TrueType)" `
+                             -Value $dest -PropertyType String -Force | Out-Null
+        }
+
+        Write-Ok "$Name installed ($($fonts.Count) faces)"
+        return $true
+    } catch {
+        Write-Fail "$Name failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Download a file, creating the destination directory if needed.
 function Get-FileFromWeb {
     param(

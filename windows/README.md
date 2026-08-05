@@ -22,7 +22,7 @@ This directory contains configuration files and scripts for setting up a Windows
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
 
 ### WezTerm (`wezterm/`)
-- **.wezterm.lua**: Terminal configuration — launches `pwsh`, JetBrainsMono Nerd Font
+- **.wezterm.lua**: Terminal configuration — launches `pwsh`, FiraCode Nerd Font Mono at 16
 
 ### Shared helpers (`common.ps1`)
 Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`, and the privilege
@@ -118,7 +118,22 @@ There is no zellij option either — zellij has no native Windows support.
 - winget (App Installer) — for the install options
 - Developer Mode or Administrator — for real symlinks
 
-Git, Python, Vim, starship, WezTerm and AutoHotkey are all installed by `Install Base Tools`.
+Git, Python, Vim, starship, WezTerm, AutoHotkey and the terminal font are all installed by
+`Install Base Tools`.
+
+## Font
+
+Everything assumes **FiraCode Nerd Font Mono** at size 16 — wezterm sets it directly, and the starship
+prompt and vim-airline both draw glyphs that only a Nerd Font provides.
+
+winget carries exactly one Nerd Font (JetBrainsMono), so `Install Base Tools` fetches FiraCode from the
+[ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release instead — see `Install-NerdFont`
+in `common.ps1`. It installs per-user (no elevation needed) into `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
+and registers each face under `HKCU`, which is what makes a per-user font visible to applications.
+
+Only the `Mono` faces are installed; the archive also ships proportional and non-Mono families that
+would otherwise clutter the font list. Terminals other than wezterm (Windows Terminal, VS Code) are not
+tracked in this repo — set them to `FiraCode Nerd Font Mono` by hand.
 
 ## Customization
 

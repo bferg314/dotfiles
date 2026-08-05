@@ -192,3 +192,59 @@ github_latest_tag() {
     curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
         grep '"tag_name"' | head -n1 | cut -d'"' -f4
 }
+
+# ─── Fonts ────────────────────────────────────────────────────────────────────
+
+# Install a Nerd Font from the upstream GitHub release, per-user.
+#     install_nerd_font <archive> <file glob> <display name>
+#     install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono'
+#
+# The Nerd Font variants are not packaged consistently across distros (Arch has
+# ttf-firacode-nerd, Fedora and Debian have only the non-Nerd Fira Code), so
+# this pulls the release directly the way the zellij install in base.sh does.
+# Same source on every platform means every machine gets the same version.
+install_nerd_font() {
+    local archive="$1" pattern="$2" name="$3"
+    local font_dir="$HOME/.local/share/fonts/$archive"
+
+    step "Installing $name..."
+
+    # shellcheck disable=SC2086
+    if [ -d "$font_dir" ] && ls $font_dir/$pattern >/dev/null 2>&1; then
+        ok "$name already installed"
+        return 0
+    fi
+
+    local tag
+    tag="$(github_latest_tag ryanoasis/nerd-fonts)"
+    [ -n "$tag" ] || { warn "Could not determine the latest nerd-fonts release (GitHub API rate limit?)"; return 1; }
+    info "nerd-fonts $tag"
+
+    local tmp
+    tmp="$(mktemp -d)"
+    # Local trap: the caller's make_tmpdir trap must survive this function.
+    trap 'rm -rf "$tmp"' RETURN
+
+    if ! curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}/${archive}.tar.xz" |
+            tar -xJ -C "$tmp"; then
+        warn "Failed to download or extract ${archive}.tar.xz"
+        return 1
+    fi
+
+    mkdir -p "$font_dir"
+    # Only the requested variant: the archive also carries the proportional and
+    # non-Mono families, which we do not want cluttering the font list.
+    # shellcheck disable=SC2086
+    cp $tmp/$pattern "$font_dir/" 2>/dev/null || {
+        warn "No files matching $pattern in ${archive}.tar.xz"
+        return 1
+    }
+
+    if command -v fc-cache >/dev/null 2>&1; then
+        fc-cache -f "$font_dir" >/dev/null
+    else
+        warn "fc-cache not found; the font may not appear until you log out and back in"
+    fi
+
+    ok "$name installed"
+}

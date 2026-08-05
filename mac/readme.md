@@ -59,6 +59,14 @@ The setup script provides options to:
 - Copy on select
 - 10k line scrollback
 
+## Font
+
+The terminal font is **FiraCode Nerd Font Mono** at size 16, the same on every platform. `installs/base.sh`
+installs it into `~/Library/Fonts` from the [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts)
+release — the same source the Linux and Windows installers use, so every machine ends up on an identical
+version. (Homebrew's `font-fira-code-nerd-font` cask would also work, but versions would drift.) Only the
+`Mono` faces are installed; point Terminal/iTerm at it afterwards.
+
 ## Requirements
 - zsh
 - Git
