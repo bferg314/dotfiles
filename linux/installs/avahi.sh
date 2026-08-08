@@ -82,7 +82,7 @@ echo
 
 echo -e "${BOLD}${GREEN}=== Avahi Installation Complete ===${NC}"
 echo
-echo -e "${BLUE}This machine is now discoverable as: ${BOLD}$(hostname).local${NC}"
+echo -e "${BLUE}This machine is now discoverable as: ${BOLD}${HOSTNAME:-$(uname -n)}.local${NC}"
 echo
 echo -e "${BLUE}Avahi daemon status:${NC}"
 sudo systemctl status avahi-daemon --no-pager | head -n 3

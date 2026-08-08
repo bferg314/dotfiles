@@ -369,9 +369,9 @@ generate_ssh_key() {
         read -p "$(echo -e "${CYAN}  Protect SSH key with a passphrase? (recommended) [Y/n]: ${NC}")" use_passphrase
         echo
         if [[ "$use_passphrase" =~ ^[Nn]$ ]]; then
-            ssh-keygen -t ed25519 -f "$key_path" -N "" -C "${USER}@$(hostname)"
+            ssh-keygen -t ed25519 -f "$key_path" -N "" -C "${USER}@${HOSTNAME:-$(uname -n)}"
         else
-            ssh-keygen -t ed25519 -f "$key_path" -C "${USER}@$(hostname)"
+            ssh-keygen -t ed25519 -f "$key_path" -C "${USER}@${HOSTNAME:-$(uname -n)}"
         fi
         chmod 600 "$key_path"
         ok "SSH key generated at ${key_path}"
