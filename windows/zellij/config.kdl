@@ -1,0 +1,25 @@
+// Zellij configuration
+
+// UI options
+ui {
+    pane_frames {
+        rounded_corners true
+    }
+}
+
+// Theme
+theme "default"
+
+// Default shell
+//
+// Required on Windows: with no default_shell, zellij falls back to cmd.exe
+// even when launched from PowerShell (zellij-org/zellij#4897). Resolved from
+// PATH, which the PowerShell 7 install puts pwsh.exe on -- replace with the
+// full path if you install it somewhere unusual.
+default_shell "pwsh"
+
+// Scroll buffer size
+scroll_buffer_size 10000
+
+// Copy on select
+copy_on_select true

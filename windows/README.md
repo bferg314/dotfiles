@@ -24,12 +24,43 @@ This directory contains configuration files and scripts for setting up a Windows
 ### WezTerm (`wezterm/`)
 - **.wezterm.lua**: Terminal configuration — launches `pwsh`, FiraCode Nerd Font Mono at 16
 
+### Zellij (`zellij/`)
+- **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the
+  Linux and macOS copies. It is a separate file only because `default_shell` has to differ
+  (`bash` / `zsh` / `pwsh`) and zellij's config format has no include mechanism. Without the
+  `pwsh` line zellij falls back to `cmd.exe`, even when launched from PowerShell
+  ([zellij#4897](https://github.com/zellij-org/zellij/issues/4897)).
+
 ### Shared helpers (`common.ps1`)
 Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`, and the privilege
 checks. Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
 `linux/installs/common.sh`.
 
 ## Installation
+
+### Day zero (`bootstrap.ps1`)
+
+On a machine with nothing installed, run the bootstrap from the repo root instead — it installs git,
+clones this repo, sets your git identity, generates an SSH key for GitHub, and hands off to
+`setup.ps1`:
+
+```powershell
+irm https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.ps1 | iex
+```
+
+The counterpart to `bootstrap.sh`, with the differences Windows forces:
+
+| `bootstrap.sh` | `bootstrap.ps1` |
+|---|---|
+| Detects pacman / dnf / apt | Requires winget (one target, so it only checks) |
+| Installs `sudo` when run as root | Nothing — elevation is per-process on Windows |
+| Offers to create a regular user | Nothing — you are already a normal user |
+| Installs `openssh-server` | Adds the `OpenSSH.Server` capability + a TCP/22 firewall rule, **elevated only** |
+| Key goes in `~/.ssh/authorized_keys` | Administrators' keys go in `%ProgramData%\ssh\administrators_authorized_keys`, with the ACL sshd demands |
+
+Running unelevated is supported; it skips the SSH-server step and says so up front.
+
+### Existing machine
 
 1. Clone this repository:
 ```powershell
@@ -62,6 +93,7 @@ Every option is idempotent — re-running it is safe and will report what is alr
 | `windows/vim/.vimrc` | `~\_vimrc` |
 | `windows/wezterm/.wezterm.lua` | `~\.wezterm.lua` |
 | `starship/tokyo.toml` | `~\.config\starship.toml` |
+| `windows/zellij/config.kdl` | `%APPDATA%\Zellij\config\config.kdl` |
 | `windows/ahk/WindowsShortcuts.ahk` | Startup folder |
 | `windows/posh.d/*.ps1` | Sourced from both PowerShell profiles |
 
@@ -86,8 +118,12 @@ replaced.
 Installs use **winget**, which ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
 Chocolatey is no longer used. Package IDs live in `installs/base.ps1` and `installs/desktop.ps1`.
 
+`bootstrap.ps1` and `Install Base Tools` both install **UniGetUI** (`Devolutions.UniGetUI`), a GUI over
+winget, scoop, chocolatey, pip and npm. Its package id has moved twice — WingetUI, then
+`MartiCliment.UniGetUI` — and the older ids now resolve only to the pre-release channel, so the
+current one is pinned explicitly.
+
 There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local` mDNS names natively.
-There is no zellij option either — zellij has no native Windows support.
 
 ## Usage
 
@@ -107,6 +143,10 @@ There is no zellij option either — zellij has no native Windows support.
 - `mem`: Show memory usage
 - `disk`: Show disk usage
 
+### Dotfiles
+- `dotsetup`: Open the setup menu from anywhere, the same as the Linux `dotsetup`. Available once
+  `Create Links` has configured your profile and you have opened a new shell.
+
 ### File Operations
 - `mkcd`: Create and enter directory
 - `bak`: Create backup of a file
@@ -118,8 +158,8 @@ There is no zellij option either — zellij has no native Windows support.
 - winget (App Installer) — for the install options
 - Developer Mode or Administrator — for real symlinks
 
-Git, Python, Vim, starship, WezTerm, AutoHotkey and the terminal font are all installed by
-`Install Base Tools`.
+Git, Python, Vim, zellij, starship, WezTerm, AutoHotkey, UniGetUI and the terminal font are all
+installed by `Install Base Tools`.
 
 ## Font
 
