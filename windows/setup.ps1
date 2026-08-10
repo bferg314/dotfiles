@@ -129,6 +129,13 @@ function Set-DotfileLinks {
     New-DotfileLink -Source "$SCRIPT_DIR\wezterm\.wezterm.lua" -Target "$HOME\.wezterm.lua" | Out-Null
     New-DotfileLink -Source "$REPO_ROOT\starship\tokyo.toml"   -Target "$HOME\.config\starship.toml" | Out-Null
 
+    # Not ~\.config\zellij, the path the linux and mac scripts use. On Windows
+    # zellij resolves its config through ProjectDirs::from("", "", "Zellij"),
+    # which is %APPDATA%\Zellij\config -- the ~\.config convention is not part
+    # of the lookup there.
+    New-DotfileLink -Source "$SCRIPT_DIR\zellij\config.kdl" `
+                    -Target "$env:APPDATA\Zellij\config\config.kdl" | Out-Null
+
     $startup = [Environment]::GetFolderPath('Startup')
     New-DotfileLink -Source "$SCRIPT_DIR\ahk\WindowsShortcuts.ahk" `
                     -Target (Join-Path $startup 'WindowsShortcuts.ahk') | Out-Null
@@ -139,6 +146,7 @@ function Set-DotfileLinks {
     Write-Host ""
     Write-Ok "Setup complete! Links created and PowerShell configured."
     Write-Info "Open a new shell, or run: . `$PROFILE"
+    Write-Info "Then 'dotsetup' reopens this menu from anywhere."
 }
 
 function Install-VimPlug {

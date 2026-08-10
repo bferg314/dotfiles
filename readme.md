@@ -35,7 +35,27 @@ This will:
 4. Generate an SSH key to import into GitHub
 5. Add a public SSH key so you can remote in without a password
 
-### Windows
+### New Windows Machine (Bootstrap)
+
+Run this in PowerShell on any fresh Windows device — it walks through the same steps as the Linux
+bootstrap:
+
+```powershell
+irm https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.ps1 | iex
+```
+
+This will:
+1. Install `git`, `vim` and `UniGetUI` via winget, plus the OpenSSH client
+2. Clone this repo to `%USERPROFILE%\dotfiles`
+3. Set up your git username and email
+4. Generate an SSH key to import into GitHub
+5. Add a public SSH key so you can remote in without a password
+
+Run it **as Administrator** to also install and start the OpenSSH *server*, and to write the key to
+`administrators_authorized_keys` — the only authorized-keys file Windows sshd reads for members of
+the Administrators group.
+
+### Windows (existing machine)
 
 ```powershell
 git clone https://github.com/bferg314/dotfiles.git

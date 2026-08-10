@@ -22,6 +22,21 @@ Set-Alias ls ls_color -Force -Option AllScope
 function Edit-Profile { code $PROFILE }
 function Edit-Aliases { code $PSScriptRoot\aliases.ps1 }
 
+# Run dotfiles setup from anywhere - the counterpart to dotsetup in
+# linux/bashrc.d/alias-bash.bashrc.
+#
+# posh.d is sourced in place from the repo, so $PSScriptRoot already points at
+# <repo>\windows\posh.d and none of the symlink resolution the Linux version
+# needs applies here.
+function dotsetup {
+    $setup = Join-Path $PSScriptRoot '..\setup.ps1'
+    if (-not (Test-Path -LiteralPath $setup)) {
+        Write-Warning "Dotfiles setup not found at $setup"
+        return
+    }
+    & $setup
+}
+
 # System info
 function Get-MyIP { (Invoke-WebRequest -Uri "https://ifconfig.me/ip").Content }
 

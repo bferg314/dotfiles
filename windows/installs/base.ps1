@@ -52,6 +52,14 @@ Install-Package -Id 'vim.vim'             -Name 'Vim'            | Out-Null
 Install-Package -Id 'Python.Python.3.13'  -Name 'Python 3.13'    | Out-Null
 Install-Package -Id 'OpenJS.NodeJS.LTS'   -Name 'Node.js LTS'    | Out-Null
 Install-Package -Id 'Docker.DockerDesktop' -Name 'Docker Desktop' | Out-Null
+
+# A GUI over winget/scoop/chocolatey/pip/npm, for the packages that are easier
+# to browse for than to remember the id of.
+#
+# Published as MartiCliment.UniGetUI (and WingetUI before that) until the
+# project moved to Devolutions - the old ids now resolve only to the
+# pre-release channel, so pin the current one.
+Install-Package -Id 'Devolutions.UniGetUI' -Name 'UniGetUI' | Out-Null
 Write-Host ""
 
 # ─── Prompt and terminal ──────────────────────────────────────────────────────
@@ -72,8 +80,14 @@ if (-not (Install-NerdFont -Archive 'FiraCode' `
 }
 Write-Host ""
 
-# No zellij: it has no native Windows support, so there is deliberately no
-# counterpart to the zellij section of linux/installs/base.sh.
+# ─── Terminal multiplexer ─────────────────────────────────────────────────────
+#
+# The counterpart to the zellij section of linux/installs/base.sh. Upstream now
+# ships an official x86_64-pc-windows-msvc MSI, which winget packages, so unlike
+# the Linux side this needs no manual GitHub release fetch.
+
+Install-Package -Id 'Zellij.Zellij' -Name 'zellij' | Out-Null
+Write-Host ""
 
 # ─── Build tools ──────────────────────────────────────────────────────────────
 #
