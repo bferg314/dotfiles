@@ -132,20 +132,30 @@ function Install-Package {
             Write-Ok "$Name already installed"
             return $true
         }
-
-        Write-Info "Installing $Name..."
-        # Out-Host, not bare output: winget's progress would otherwise be
-        # returned alongside the boolean and make every caller truthy.
-        winget install --id $Id --exact --silent --disable-interactivity `
-            --accept-package-agreements --accept-source-agreements | Out-Host
-        $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previous
     }
 
-    # winget returns HRESULTs, which land in $LASTEXITCODE as negative int32.
-    # Mask back to unsigned so they can be compared against the documented
-    # hex codes rather than hand-computed negative decimals.
+    Write-Info "Installing $Name..."
+    # Start-Process rather than a pipeline. winget animates its spinner and
+    # progress bar by rewinding with a bare carriage return, but PowerShell's
+    # native-command reader treats a lone CR as a line terminator - so through
+    # a pipe every frame of the animation lands on its own line and scrolls a
+    # column of / - \ | down the screen. Handing winget the console directly
+    # lets it redraw in place, and keeps its output out of this function's
+    # return value (which would otherwise make every caller truthy).
+    #
+    # -ArgumentList is joined with spaces and quoted by nobody, so every
+    # argument below has to stay whitespace-free. common.ps1 needs a quoting
+    # helper for this; the ids here are all literals, so it does not.
+    $proc = Start-Process -FilePath 'winget' -NoNewWindow -Wait -PassThru -ArgumentList @(
+        'install', '--id', $Id, '--exact', '--silent', '--disable-interactivity',
+        '--accept-package-agreements', '--accept-source-agreements')
+    $code = $proc.ExitCode
+
+    # winget returns HRESULTs, which arrive as negative int32. Mask back to
+    # unsigned so they can be compared against the documented hex codes rather
+    # than hand-computed negative decimals.
     $unsigned = $code -band 0xFFFFFFFFL
 
     switch ($unsigned) {
@@ -172,13 +182,13 @@ function Confirm-Plan {
         Write-Host "  5. Configure git global identity"
         Write-Host "  6. Generate an SSH key for GitHub"
         Write-Host "  7. Set up authorized_keys for remote login"
-        Write-Host "  8. Optionally run full dotfiles setup"
+        Write-Host "  8. Allow local scripts, and optionally run full dotfiles setup"
     } else {
         Write-Host "  3. Clone your dotfiles repository"
         Write-Host "  4. Configure git global identity"
         Write-Host "  5. Generate an SSH key for GitHub"
         Write-Host "  6. Set up authorized_keys for remote login"
-        Write-Host "  7. Optionally run full dotfiles setup"
+        Write-Host "  7. Allow local scripts, and optionally run full dotfiles setup"
         Write-Host ""
         Write-Warn "The OpenSSH server needs Administrator - re-run elevated for that step."
     }
@@ -548,6 +558,67 @@ function Set-AuthorizedKey {
 
 # --- Step 7: Offer full dotfiles setup ---------------------------------------
 
+# The bootstrap itself arrives over `irm | iex`, which the execution policy
+# never applies to - nothing is read from disk. setup.ps1 is read from disk, so
+# on a stock Windows install (Restricted) the handoff below dies with
+# UnauthorizedAccess, and so does every later run of setup.ps1 by hand.
+#
+# RemoteSigned rather than Bypass: a git clone leaves no mark-of-the-web on the
+# files, so RemoteSigned is enough to run them, while still refusing unsigned
+# scripts that arrive from a browser or mail client.
+function Test-ScriptPolicy {
+    return ((Get-ExecutionPolicy) -in @('RemoteSigned', 'Unrestricted', 'Bypass'))
+}
+
+function Enable-LocalScript {
+    if (Test-ScriptPolicy) {
+        Write-Ok "Execution policy already allows local scripts"
+        return $true
+    }
+
+    # Group Policy outranks every scope this script could write, so detect it
+    # rather than reporting success on a Set-ExecutionPolicy that took no
+    # effect.
+    $managed = @('MachinePolicy', 'UserPolicy') |
+        Where-Object { (Get-ExecutionPolicy -Scope $_) -ne 'Undefined' }
+    if ($managed) {
+        Write-Warn "Execution policy is enforced by Group Policy ($($managed -join ', '))."
+        Write-Warn "Scripts cannot be run from disk until that policy changes."
+        return $false
+    }
+
+    # Process scope first, and the order is not cosmetic: Set-ExecutionPolicy
+    # refuses with a SecurityException when a more specific scope would
+    # override the one being written, and Process outranks CurrentUser. Writing
+    # Process first clears that override, so both writes land. The reverse
+    # order throws on the first write - and takes the second one with it -
+    # whenever the shell was started with -ExecutionPolicy.
+    try {
+        Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+    } catch {
+        Write-Warn "Could not set the execution policy: $($_.Exception.Message)"
+        return $false
+    }
+
+    # The durable half: this is what makes later runs of setup.ps1 by hand
+    # work. Best effort - the handoff below only needs the process scope above.
+    try {
+        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+    } catch {
+        Write-Warn "Execution policy relaxed for this session only: $($_.Exception.Message)"
+    }
+
+    # Verified rather than assumed: Set-ExecutionPolicy can succeed on a scope
+    # that a higher-precedence one still overrides.
+    if (Test-ScriptPolicy) {
+        Write-Ok "Execution policy set to RemoteSigned (current user)"
+        return $true
+    }
+
+    Write-Warn "Execution policy is still $(Get-ExecutionPolicy) after the change."
+    return $false
+}
+
 function Invoke-DotfilesSetup {
     param([string]$Number)
 
@@ -558,6 +629,13 @@ function Invoke-DotfilesSetup {
     if (-not (Test-Path -LiteralPath $setupScript)) {
         Write-Warn "setup.ps1 not found at $setupScript"
         Write-Warn "Ensure the repo was cloned successfully."
+        Write-Separator
+        return
+    }
+
+    if (-not (Enable-LocalScript)) {
+        Write-Warn "Skipping. Once the policy allows it, run:"
+        Write-Warn "  $setupScript"
         Write-Separator
         return
     }

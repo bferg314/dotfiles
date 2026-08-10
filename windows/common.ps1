@@ -128,6 +128,17 @@ function Test-PackageInstalled {
     }
 }
 
+# Start-Process takes one command line, not an argv array -- PowerShell joins
+# -ArgumentList with spaces and quotes nothing -- so anything containing
+# whitespace has to be quoted here. Follows the CommandLineToArgvW rules the
+# other side will parse with: backslashes are only special before a quote or at
+# the end of a quoted run, where they must be doubled.
+function ConvertTo-NativeArg {
+    param([string]$Value)
+    if ($Value -notmatch '[\s"]') { return $Value }
+    return '"' + (($Value -replace '(\\+)(?="|$)', '$1$1') -replace '"', '\"') + '"'
+}
+
 # The pkg_install equivalent. Idempotent: the winget list pre-check stands in
 # for the `command -v` guards used throughout the linux installers.
 function Install-Package {
@@ -144,22 +155,23 @@ function Install-Package {
         return $true
     }
 
-    $previous = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        # Out-Host, not bare output: winget's progress would otherwise land in
-        # this function's output stream and be returned alongside the boolean,
-        # making every caller's `if (Install-Package ...)` truthy.
-        winget install --id $Id --exact --silent --disable-interactivity `
-            --accept-package-agreements --accept-source-agreements @ExtraArgs | Out-Host
-        $code = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $previous
-    }
+    # Start-Process rather than a pipeline. winget animates its spinner and
+    # progress bar by rewinding with a bare carriage return, but PowerShell's
+    # native-command reader treats a lone CR as a line terminator - so through
+    # a pipe every frame of the animation lands on its own line and scrolls a
+    # column of / - \ | down the screen. Handing winget the console directly
+    # lets it redraw in place, and keeps its output out of this function's
+    # output stream, where it would be returned alongside the boolean and make
+    # every caller's `if (Install-Package ...)` truthy.
+    $argv = @('install', '--id', $Id, '--exact', '--silent', '--disable-interactivity',
+              '--accept-package-agreements', '--accept-source-agreements') + $ExtraArgs
+    $proc = Start-Process -FilePath 'winget' -NoNewWindow -Wait -PassThru `
+        -ArgumentList (($argv | ForEach-Object { ConvertTo-NativeArg $_ }) -join ' ')
+    $code = $proc.ExitCode
 
-    # winget returns HRESULTs, which land in $LASTEXITCODE as negative int32.
-    # Mask back to unsigned so they can be compared against the documented
-    # hex codes rather than hand-computed negative decimals.
+    # winget returns HRESULTs, which arrive as negative int32. Mask back to
+    # unsigned so they can be compared against the documented hex codes rather
+    # than hand-computed negative decimals.
     $unsigned = $code -band 0xFFFFFFFFL
 
     switch ($unsigned) {
