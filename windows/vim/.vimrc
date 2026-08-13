@@ -27,3 +27,4 @@ nnoremap <C-H> <C-W><C-H>
 set pastetoggle=<F3>
 
 set clipboard=unnamed
+
