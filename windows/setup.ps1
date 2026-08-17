@@ -114,6 +114,25 @@ function Set-AllPoshProfiles {
 
 # ─── Menu actions ─────────────────────────────────────────────────────────────
 
+# wezterm was dropped from the repo, but a machine set up before that still has
+# ~\.wezterm.lua pointing at the deleted file. Only links into this repo are
+# removed - a hand-written config of your own is left alone.
+function Remove-LegacyWeztermLink {
+    $path = "$HOME\.wezterm.lua"
+
+    # Get-Item rather than Test-Path: a symlink whose target no longer exists -
+    # exactly the case this cleans up - resolves to $false under Test-Path.
+    $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if ($item.LinkType -notin @('SymbolicLink', 'HardLink')) { return }
+
+    $points = @($item.Target) | ForEach-Object { "$_" }
+    if (-not ($points | Where-Object { $_ -like "*\windows\wezterm\*" })) { return }
+
+    Remove-Item -LiteralPath $path -Force
+    Write-Ok "Removed stale ~\.wezterm.lua link (wezterm is no longer part of this repo)"
+}
+
 function Set-DotfileLinks {
     Write-Header "Creating Dotfile Links"
 
@@ -125,9 +144,8 @@ function Set-DotfileLinks {
 
     # Out-Null on each: these return a status boolean that would otherwise
     # print a stray "True" between the progress lines.
-    New-DotfileLink -Source "$SCRIPT_DIR\vim\.vimrc"           -Target "$HOME\_vimrc" | Out-Null
-    New-DotfileLink -Source "$SCRIPT_DIR\wezterm\.wezterm.lua" -Target "$HOME\.wezterm.lua" | Out-Null
-    New-DotfileLink -Source "$REPO_ROOT\starship\tokyo.toml"   -Target "$HOME\.config\starship.toml" | Out-Null
+    New-DotfileLink -Source "$SCRIPT_DIR\vim\.vimrc"         -Target "$HOME\_vimrc" | Out-Null
+    New-DotfileLink -Source "$REPO_ROOT\starship\tokyo.toml" -Target "$HOME\.config\starship.toml" | Out-Null
 
     # Not ~\.config\zellij, the path the linux and mac scripts use. On Windows
     # zellij resolves its config through ProjectDirs::from("", "", "Zellij"),
@@ -139,6 +157,8 @@ function Set-DotfileLinks {
     $startup = [Environment]::GetFolderPath('Startup')
     New-DotfileLink -Source "$SCRIPT_DIR\ahk\WindowsShortcuts.ahk" `
                     -Target (Join-Path $startup 'WindowsShortcuts.ahk') | Out-Null
+
+    Remove-LegacyWeztermLink
 
     Write-Host ""
     Set-AllPoshProfiles
@@ -183,7 +203,7 @@ function Install-PowerShell7 {
         Write-Step "Configuring the PowerShell 7 profile..."
         Set-AllPoshProfiles
         Write-Host ""
-        Write-Info "wezterm is already configured to launch pwsh.exe."
+        Write-Info "Point your terminal at pwsh.exe to make it the default shell."
     }
 
     Show-PackageFailures | Out-Null

@@ -100,14 +100,53 @@ install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono
     warn "Continuing without the font; prompt glyphs will not render."
 echo
 
-# 4. Install Python3 and pip
-step "Installing Python3 and pip..."
-if [ "$PKG_MANAGER" = "pacman" ]; then
-    pkg_install python python-pip
+# 4. Install Python and pip
+#
+# PYTHON_SERIES is the version this repo targets. Where a distro packages that
+# series under a versioned name it is installed explicitly; otherwise the
+# generic python3 goes in and the difference is reported rather than papered
+# over. Arch tracks upstream closely enough that plain `python` is the target.
+PYTHON_SERIES="3.14"
+
+step "Installing Python ${PYTHON_SERIES} and pip..."
+case "$PKG_MANAGER" in
+    pacman)
+        pkg_install python python-pip
+        ;;
+    dnf)
+        if pkg_available "python${PYTHON_SERIES}"; then
+            pkg_install "python${PYTHON_SERIES}" python3-pip
+        else
+            warn "python${PYTHON_SERIES} is not in this distro's repos - installing the default python3"
+            pkg_install python3 python3-pip
+        fi
+        ;;
+    apt)
+        if pkg_available "python${PYTHON_SERIES}"; then
+            # -venv is split out of the interpreter on Debian and Ubuntu, and
+            # the alias-python.bashrc `cvenv` shortcut needs it.
+            pkg_install "python${PYTHON_SERIES}" "python${PYTHON_SERIES}-venv" python3-pip
+        else
+            warn "python${PYTHON_SERIES} is not in this distro's repos - installing the default python3"
+            pkg_install python3 python3-pip
+        fi
+        ;;
+esac
+
+DEFAULT_PYTHON="$(python3 --version 2>&1 | awk '{print $2}')"
+if command -v "python${PYTHON_SERIES}" >/dev/null 2>&1; then
+    ok "Python $("python${PYTHON_SERIES}" --version | awk '{print $2}') and pip installed"
+    case "$DEFAULT_PYTHON" in
+        "${PYTHON_SERIES}".*) ;;
+        *) info "python3 still resolves to ${DEFAULT_PYTHON}; use python${PYTHON_SERIES} for new virtualenvs" ;;
+    esac
 else
-    pkg_install python3 python3-pip
+    ok "Python ${DEFAULT_PYTHON} and pip installed"
+    case "$DEFAULT_PYTHON" in
+        "${PYTHON_SERIES}".*) ;;
+        *) warn "This distro has no Python ${PYTHON_SERIES} package; ${DEFAULT_PYTHON} is the newest available" ;;
+    esac
 fi
-ok "Python3 and pip installed"
 echo
 
 # 5. Install Node Version Manager (nvm) and LTS Node
@@ -140,6 +179,14 @@ echo
 step "Installing development tools..."
 pkg_install_devtools
 ok "Development tools installed"
+echo
+
+# 6b. Install the Rust toolchain
+# After the development tools above: the default toolchain links with cc, and
+# rustup only warns about a missing linker rather than failing.
+# set -e is active, and a failed rustup should not abort the whole base install.
+step "Installing rustup..."
+install_rustup || warn "Continuing without Rust; re-run this script or see https://rustup.rs"
 echo
 
 # 7. Install and configure Git
@@ -196,3 +243,4 @@ echo -e "${YELLOW}IMPORTANT: If this is your first time installing Docker, you n
 echo -e "log out and log back in for the docker group changes to take effect.${NC}"
 echo
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
+echo -e "${BLUE}cargo and rustc land on PATH in a new shell (bashrc.d/rust.bashrc): ${BOLD}rustup show${NC}"

@@ -6,6 +6,7 @@ This directory contains configuration files and scripts for setting up a Windows
 
 ### PowerShell Configuration (`posh.d/`)
 - **alias-python.ps1**: Python development environment aliases and functions
+- **rust.ps1**: cargo shortcuts, and `~\.cargo\bin` on PATH for the current session
 - **system.ps1**: System information and monitoring tools
 - **history.ps1**: Enhanced command history management
 - **functions.ps1**: Utility functions for daily tasks
@@ -20,9 +21,6 @@ This directory contains configuration files and scripts for setting up a Windows
 
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
-
-### WezTerm (`wezterm/`)
-- **.wezterm.lua**: Terminal configuration — launches `pwsh`, FiraCode Nerd Font Mono at 16
 
 ### Zellij (`zellij/`)
 - **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the
@@ -91,7 +89,6 @@ Every option is idempotent — re-running it is safe and will report what is alr
 | Source | Target |
 |---|---|
 | `windows/vim/.vimrc` | `~\_vimrc` |
-| `windows/wezterm/.wezterm.lua` | `~\.wezterm.lua` |
 | `starship/tokyo.toml` | `~\.config\starship.toml` |
 | `windows/zellij/config.kdl` | `%APPDATA%\Zellij\config\config.kdl` |
 | `windows/ahk/WindowsShortcuts.ahk` | Startup folder |
@@ -102,6 +99,10 @@ The `posh.d` block is written to the **AllHosts** profile for both Windows Power
 so it also loads in the VS Code terminal. The block is delimited by
 `# >>> dotfiles posh.d >>>` markers and is rewritten in place on every run, so moving the repo and
 re-running option 1 fixes the paths.
+
+`Create Links` also removes a leftover `~\.wezterm.lua` link on machines set up before wezterm was
+dropped from this repo. A `.wezterm.lua` of your own is left alone — only links pointing into
+`windows\wezterm\` are removed.
 
 ### Symlinks and privileges
 
@@ -126,6 +127,12 @@ current one is pinned explicitly.
 There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local` mDNS names natively.
 
 ## Usage
+
+### Rust Development
+- `cb` / `cr` / `ct`: cargo build / run / test
+- `ck`: cargo check
+- `cfmt`: cargo fmt
+- `ccl`: cargo clippy
 
 ### Python Development
 - `py`: Run Python
@@ -158,13 +165,17 @@ There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local
 - winget (App Installer) — for the install options
 - Developer Mode or Administrator — for real symlinks
 
-Git, Python, Vim, zellij, starship, WezTerm, AutoHotkey, UniGetUI and the terminal font are all
+Git, Python 3.14, Vim, zellij, starship, rustup, AutoHotkey, UniGetUI and the terminal font are all
 installed by `Install Base Tools`.
+
+`rustup` is installed after the VS Build Tools on purpose: the default `x86_64-pc-windows-msvc`
+toolchain needs the MSVC linker, and rustup only warns about a missing one rather than failing.
+`cargo` and `rustc` are on PATH in a new shell.
 
 ## Font
 
-Everything assumes **FiraCode Nerd Font Mono** at size 16 — wezterm sets it directly, and the starship
-prompt and vim-airline both draw glyphs that only a Nerd Font provides.
+Everything assumes **FiraCode Nerd Font Mono** at size 16 — the starship prompt and vim-airline both
+draw glyphs that only a Nerd Font provides.
 
 winget carries exactly one Nerd Font (JetBrainsMono), so `Install Base Tools` fetches FiraCode from the
 [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release instead — see `Install-NerdFont`
@@ -172,8 +183,8 @@ in `common.ps1`. It installs per-user (no elevation needed) into `%LOCALAPPDATA%
 and registers each face under `HKCU`, which is what makes a per-user font visible to applications.
 
 Only the `Mono` faces are installed; the archive also ships proportional and non-Mono families that
-would otherwise clutter the font list. Terminals other than wezterm (Windows Terminal, VS Code) are not
-tracked in this repo — set them to `FiraCode Nerd Font Mono` by hand.
+would otherwise clutter the font list. No terminal emulator config is tracked in this repo, so set
+whichever one you use (Windows Terminal, VS Code) to `FiraCode Nerd Font Mono` by hand.
 
 ## Customization
 

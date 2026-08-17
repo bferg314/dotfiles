@@ -8,6 +8,7 @@ This repository contains my personal dotfiles, organized by operating system. It
 
 - Shell environments (PowerShell, Bash)
 - Python development tools
+- Rust toolchain (rustup)
 - Vim editor
 - AutoHotkey scripts (Windows)
 - Various system utilities and aliases
@@ -72,7 +73,8 @@ gets linked where, and the Developer Mode requirement for symlinks.
 
 ## Features
 
-- Cross-platform Python development environment
+- Cross-platform Python development environment, pinned to the same 3.14 series everywhere
+- Rust via `rustup` on all three platforms, so toolchains are managed the same way
 - Consistent shell aliases across operating systems
 - One terminal font everywhere — FiraCode Nerd Font Mono at 16, installed from the
   same [nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release on all three platforms
@@ -90,7 +92,8 @@ gets linked where, and the Developer Mode requirement for symlinks.
 ### Linux
 - Bash
 - Git
-- Python (optional)
+- `curl` (used by the install scripts for rustup, nvm, zellij and the font)
+- Python 3.14 (optional)
 
 ## License
 

@@ -10,6 +10,7 @@ Configuration files and scripts for setting up a macOS development environment.
 - **functions.zshrc**: Utility functions (mkcd, extract, etc.)
 - **hist.zshrc**: Enhanced history management
 - **list_aliases.zshrc**: Tool to list and manage aliases
+- **rust.zshrc**: Puts `~/.cargo/bin` on PATH and adds the cargo shortcuts
 
 ### Vim Configuration (`vim/`)
 - **.vimrc**: Vim editor setup with plugins:
@@ -54,6 +55,16 @@ The setup script provides options to:
 - Code formatting tools
 - Package management helpers
 
+`installs/base.sh` installs Homebrew's `python@3.14` — the same series the Linux and Windows
+installers target. It is keg-only, so `python3` keeps pointing at whatever else Homebrew has linked
+until you put its `libexec/bin` on PATH; the script prints that path when it finishes.
+
+### Rust Development
+- `rustup` from the upstream installer (not Homebrew's formula), so all three platforms manage
+  toolchains the same way. It runs with `--no-modify-path` and `zshrc.d/rust.zshrc` puts
+  `~/.cargo/bin` on PATH instead, keeping the shell config in this repo.
+- `cb`, `cr`, `ct`, `ck`, `cfmt`, `ccl` — cargo build / run / test / check / fmt / clippy
+
 ### Terminal Multiplexing
 - zellij with rounded pane frames
 - Copy on select
@@ -72,7 +83,8 @@ version. (Homebrew's `font-fira-code-nerd-font` cask would also work, but versio
 - Git
 - Vim (optional)
 - zellij (optional)
-- Python (optional)
+- Python 3.14 (optional)
+- Rust via rustup (optional)
 
 ## Customization
 

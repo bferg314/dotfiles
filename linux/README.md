@@ -76,9 +76,10 @@ ed25519 SSH key, and appends a pasted public key to `~/.ssh/authorized_keys`.
 | Docker | `docker`, `docker-compose`, `docker-buildx` | `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin` (Docker's Fedora repo) | same packages, Docker's RHEL repo | `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin` (Docker's apt repo) |
 | Zellij | `zellij` | latest GitHub release binary → `/usr/local/bin/zellij` | same | same |
 | Font | latest Nerd Fonts release → `~/.local/share/fonts/FiraCode` | same | same | same |
-| Python | `python`, `python-pip` | `python3`, `python3-pip` | `python3`, `python3-pip` | `python3`, `python3-pip` |
+| Python 3.14 | `python`, `python-pip` | `python3.14`, `python3-pip` | `python3.14`, `python3-pip` | `python3.14`, `python3.14-venv`, `python3-pip` |
 | Node | nvm `v0.40.1` installer + `nvm install --lts` | same | same | same |
 | Dev tools | `base-devel` | `@development-tools` | `groupinstall "Development Tools"` | `build-essential` |
+| Rust | `rustup` from `sh.rustup.rs` → `~/.cargo` | same | same | same |
 | Git | `git` | `git` | `git` | `git` |
 | GitHub CLI | `github-cli` | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's apt repo) |
 
@@ -87,6 +88,17 @@ Additional actions:
 - Enables and starts the `docker` service, and adds the current user to the `docker` group (requires re-login).
 - The zellij binary is selected by architecture (`x86_64` or `aarch64`); other architectures fail with a clear message rather than installing the wrong binary.
 - **FiraCode Nerd Font Mono** is installed per-user from the [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release rather than from the distro repos, which package the Nerd variants inconsistently (Arch has `ttf-firacode-nerd`; Fedora and Debian ship only non-Nerd Fira Code). Pulling the release directly also means every machine — Linux, macOS and Windows — lands on the same version. Only the `Mono` faces are copied; `fc-cache -f` refreshes the font list. A font failure warns rather than aborting the base install.
+- **Python** is pinned to the 3.14 series. Arch's plain `python` already tracks upstream; Fedora, RHEL
+  and Debian/Ubuntu get the versioned `python3.14` package when their repos carry it, checked with
+  `pkg_available` first. Where they do not, the default `python3` is installed and the script says so
+  rather than failing — `python3` keeps pointing at the distro default either way, so use
+  `python3.14` explicitly for new virtualenvs.
+- **Rust** comes from the upstream `rustup` installer rather than the distro package: only Arch
+  carries a current `rustup`, while Debian and the RHEL family ship a pinned `rustc` with no toolchain
+  management. It runs with `--no-modify-path`, so rustup does not append its own block to `~/.bashrc`,
+  `~/.profile` and `~/.zshenv` — `bashrc.d/rust.bashrc` puts `~/.cargo/bin` on PATH instead. Installed
+  after the development tools, since the default toolchain links with `cc`. A rustup failure warns
+  rather than aborting the base install.
 - Prompts for git `user.name` / `user.email` if not already set globally.
 - The GitHub CLI comes from GitHub's own repo on dnf/apt rather than the distro
   repos, which lag. It is installed but not authenticated — run `gh auth login`
@@ -172,6 +184,8 @@ Symlinked into `~/.bashrc.d/` and sourced by both `~/.bashrc` and `~/.zshrc`.
 - **functions.bashrc** — utility functions (mkcd, extract, etc.)
 - **hist.bashrc** — enhanced history management
 - **list_aliases.bashrc** — tool to list and manage aliases
+- **rust.bashrc** — puts `~/.cargo/bin` on PATH and adds the cargo shortcuts (`cb`, `cr`, `ct`, `ck`,
+  `cfmt`, `ccl`)
 
 ### Vim (`vim/.vimrc`)
 Symlinked to `~/.vimrc`. Uses vim-plug; plugins include vim-airline, NERDTree,
@@ -184,8 +198,9 @@ frames, copy-on-select, and a 10k-line scrollback.
 
 ### Shared helpers (`installs/common.sh`)
 Sourced by every install script. Provides distro detection, the `pkg_install` /
-`pkg_update` wrappers, Flatpak and AUR-helper bootstrapping, temp-directory
-handling, architecture detection, and `install_nerd_font`.
+`pkg_update` / `pkg_available` wrappers, Flatpak and AUR-helper bootstrapping,
+temp-directory handling, architecture detection, `install_rustup`, and
+`install_nerd_font`.
 
 ## Font
 
@@ -197,7 +212,7 @@ point your terminal emulator at it afterwards.
 - Bash 4.0+
 - Git
 - `sudo` access (all install scripts use it)
-- `curl` (used for nvm, zellij, the font, and repo keys)
+- `curl` (used for nvm, rustup, zellij, the font, and repo keys)
 - `fontconfig` for `fc-cache` (the font install warns and continues without it)
 
 ## Customization

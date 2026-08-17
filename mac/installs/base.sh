@@ -94,10 +94,27 @@ else
 fi
 echo
 
-# 4. Install Python3 and pip (usually comes with macOS, but ensure latest)
-echo -e "${YELLOW}Installing Python3...${NC}"
-brew install python3
-echo -e "${GREEN}✓ Python3 installed${NC}"
+# 4. Install Python and pip
+#
+# Pinned to the series this repo targets rather than brew's rolling `python3`,
+# so macOS, Linux and Windows stay on the same one. The fallback matters when
+# Homebrew has not yet published the formula.
+PYTHON_SERIES="3.14"
+echo -e "${YELLOW}Installing Python ${PYTHON_SERIES}...${NC}"
+if brew install "python@${PYTHON_SERIES}"; then
+    echo -e "${GREEN}✓ Python ${PYTHON_SERIES} installed${NC}"
+    # Keg-only formulae are not linked into the prefix; python3 keeps pointing
+    # at whatever else is installed until the versioned bin dir is on PATH.
+    PYTHON_PREFIX="$(brew --prefix "python@${PYTHON_SERIES}" 2>/dev/null)"
+    if [ -n "$PYTHON_PREFIX" ] && [ -d "$PYTHON_PREFIX/libexec/bin" ]; then
+        echo -e "${BLUE}  → For an unversioned python3/pip3, put this on PATH:${NC}"
+        echo -e "    ${BOLD}${PYTHON_PREFIX}/libexec/bin${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ No python@${PYTHON_SERIES} formula; falling back to python3${NC}"
+    brew install python3
+    echo -e "${GREEN}✓ Python $(python3 --version 2>&1 | awk '{print $2}') installed${NC}"
+fi
 echo
 
 # 5. Install Node Version Manager (nvm) and LTS Node
@@ -138,6 +155,33 @@ else
 fi
 echo
 
+# 6b. Install the Rust toolchain
+#
+# After the Command Line Tools above: the default toolchain links with cc.
+# The upstream installer rather than Homebrew's rustup formula, so macOS, Linux
+# and Windows all manage toolchains the same way.
+#
+# --no-modify-path, because rustup would otherwise append its own PATH line to
+# ~/.zshenv, ~/.bashrc and ~/.profile. zshrc.d/rust.zshrc does that instead, so
+# the shell config stays in the repo.
+echo -e "${YELLOW}Installing rustup...${NC}"
+# An `if` rather than `[ -f ... ] && ...`: under set -e a failing test as the
+# last command of an AND-list takes the whole script down with it.
+if [ -f "$HOME/.cargo/env" ]; then \. "$HOME/.cargo/env"; fi
+if command -v rustup >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ rustup already installed ($(rustup --version 2>/dev/null | head -n1))${NC}"
+    rustup update || echo -e "${YELLOW}⚠ rustup update failed; the existing toolchain is unchanged${NC}"
+else
+    if curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
+            sh -s -- -y --no-modify-path --default-toolchain stable; then
+        if [ -f "$HOME/.cargo/env" ]; then \. "$HOME/.cargo/env"; fi
+        echo -e "${GREEN}✓ rustup installed ($(rustup --version 2>/dev/null | head -n1))${NC}"
+    else
+        echo -e "${YELLOW}⚠ rustup install failed; continuing without Rust (see https://rustup.rs)${NC}"
+    fi
+fi
+echo
+
 # 7. Install and configure Git
 echo -e "${YELLOW}Installing git...${NC}"
 brew install git
@@ -172,3 +216,4 @@ echo -e "${YELLOW}IMPORTANT: If Docker Desktop was just installed, open it from 
 echo -e "to complete the setup and grant necessary permissions.${NC}"
 echo
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
+echo -e "${BLUE}cargo and rustc land on PATH in a new shell (zshrc.d/rust.zshrc): ${BOLD}rustup show${NC}"
