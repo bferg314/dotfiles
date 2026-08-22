@@ -6,6 +6,7 @@ This directory contains configuration files and scripts for setting up a Windows
 
 ### PowerShell Configuration (`posh.d/`)
 - **alias-python.ps1**: Python development environment aliases and functions
+- **rust.ps1**: cargo shortcuts, and `~\.cargo\bin` on PATH for the current session
 - **system.ps1**: System information and monitoring tools
 - **history.ps1**: Enhanced command history management
 - **functions.ps1**: Utility functions for daily tasks
@@ -20,9 +21,6 @@ This directory contains configuration files and scripts for setting up a Windows
 
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
-
-### WezTerm (`wezterm/`)
-- **.wezterm.lua**: Terminal configuration — launches `pwsh`, FiraCode Nerd Font Mono at 16
 
 ### Zellij (`zellij/`)
 - **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the
@@ -91,7 +89,6 @@ Every option is idempotent — re-running it is safe and will report what is alr
 | Source | Target |
 |---|---|
 | `windows/vim/.vimrc` | `~\_vimrc` |
-| `windows/wezterm/.wezterm.lua` | `~\.wezterm.lua` |
 | `starship/tokyo.toml` | `~\.config\starship.toml` |
 | `windows/zellij/config.kdl` | `%APPDATA%\Zellij\config\config.kdl` |
 | `windows/ahk/WindowsShortcuts.ahk` | Startup folder |
@@ -103,6 +100,10 @@ so it also loads in the VS Code terminal. The block is delimited by
 `# >>> dotfiles posh.d >>>` markers and is rewritten in place on every run, so moving the repo and
 re-running option 1 fixes the paths.
 
+`Create Links` also removes a leftover `~\.wezterm.lua` link on machines set up before wezterm was
+dropped from this repo. A `.wezterm.lua` of your own is left alone — only links pointing into
+`windows\wezterm\` are removed.
+
 ### Symlinks and privileges
 
 Windows only permits unprivileged symlink creation when **Developer Mode** is enabled
@@ -112,6 +113,31 @@ run the setup script as Administrator to get real symlinks.
 
 Any pre-existing real file at a link target is backed up to `<name>.bak-<timestamp>` before being
 replaced.
+
+## Tests
+
+There is no test framework here — `windows/tests/*.tests.ps1` are plain scripts that print
+PASS/FAIL and exit non-zero on failure. Run one directly:
+
+```powershell
+pwsh -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
+```
+
+They are worth running under **both** hosts, since `setup.ps1` supports Windows PowerShell 5.1 as
+well as PowerShell 7:
+
+```powershell
+powershell -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
+```
+
+Cases that need something the machine may not have are skipped rather than failed — the symlink
+cases need Developer Mode or an elevated shell, and the fixture cases need the git history. A run
+that skips everything still exits 0, so check the counts.
+
+`wezterm-cleanup.tests.ps1` covers `Remove-LegacyWeztermLink`, which deletes the `~\.wezterm.lua`
+left behind on machines set up before wezterm was dropped. It gets the function and its hash table
+out of `setup.ps1` through the PowerShell parser rather than duplicating them, and points `$HOME` at
+a sandbox, so it tests the shipped source without touching your real config.
 
 ## Packages
 
@@ -126,6 +152,12 @@ current one is pinned explicitly.
 There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local` mDNS names natively.
 
 ## Usage
+
+### Rust Development
+- `cb` / `cr` / `ct`: cargo build / run / test
+- `ck`: cargo check
+- `cfmt`: cargo fmt
+- `ccl`: cargo clippy
 
 ### Python Development
 - `py`: Run Python
@@ -158,13 +190,17 @@ There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local
 - winget (App Installer) — for the install options
 - Developer Mode or Administrator — for real symlinks
 
-Git, Python, Vim, zellij, starship, WezTerm, AutoHotkey, UniGetUI and the terminal font are all
+Git, Python 3.14, Vim, zellij, starship, rustup, AutoHotkey, UniGetUI and the terminal font are all
 installed by `Install Base Tools`.
+
+`rustup` is installed after the VS Build Tools on purpose: the default `x86_64-pc-windows-msvc`
+toolchain needs the MSVC linker, and rustup only warns about a missing one rather than failing.
+`cargo` and `rustc` are on PATH in a new shell.
 
 ## Font
 
-Everything assumes **FiraCode Nerd Font Mono** at size 16 — wezterm sets it directly, and the starship
-prompt and vim-airline both draw glyphs that only a Nerd Font provides.
+Everything assumes **FiraCode Nerd Font Mono** at size 16 — the starship prompt and vim-airline both
+draw glyphs that only a Nerd Font provides.
 
 winget carries exactly one Nerd Font (JetBrainsMono), so `Install Base Tools` fetches FiraCode from the
 [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release instead — see `Install-NerdFont`
@@ -172,8 +208,8 @@ in `common.ps1`. It installs per-user (no elevation needed) into `%LOCALAPPDATA%
 and registers each face under `HKCU`, which is what makes a per-user font visible to applications.
 
 Only the `Mono` faces are installed; the archive also ships proportional and non-Mono families that
-would otherwise clutter the font list. Terminals other than wezterm (Windows Terminal, VS Code) are not
-tracked in this repo — set them to `FiraCode Nerd Font Mono` by hand.
+would otherwise clutter the font list. No terminal emulator config is tracked in this repo, so set
+whichever one you use (Windows Terminal, VS Code) to `FiraCode Nerd Font Mono` by hand.
 
 ## Customization
 

@@ -266,6 +266,29 @@ function New-DotfileLink {
 
 # ─── Misc ─────────────────────────────────────────────────────────────────────
 
+# SHA256 of a file's content with every CR stripped, so a CRLF working copy
+# hashes the same as the LF bytes stored in git. core.autocrlf rewrites line
+# endings on checkout, so hashing the file as-is would not match a reference
+# taken from the repository. Returns $null if the file cannot be read.
+function Get-NormalisedFileHash {
+    param([Parameter(Mandatory)][string]$Path)
+
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($Path)
+    } catch {
+        return $null
+    }
+
+    $lf = [byte[]]@($bytes | Where-Object { $_ -ne 13 })
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($lf)) -replace '-', '').ToLower()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 # Latest release tag for a GitHub repo, e.g. Get-GitHubLatestTag zellij-org/zellij
 function Get-GitHubLatestTag {
     param([Parameter(Mandatory)][string]$Repo)

@@ -49,7 +49,7 @@ Write-Host ""
 
 Install-Package -Id 'GitHub.cli'          -Name 'GitHub CLI'     | Out-Null
 Install-Package -Id 'vim.vim'             -Name 'Vim'            | Out-Null
-Install-Package -Id 'Python.Python.3.13'  -Name 'Python 3.13'    | Out-Null
+Install-Package -Id 'Python.Python.3.14'  -Name 'Python 3.14'    | Out-Null
 Install-Package -Id 'OpenJS.NodeJS.LTS'   -Name 'Node.js LTS'    | Out-Null
 Install-Package -Id 'Docker.DockerDesktop' -Name 'Docker Desktop' | Out-Null
 
@@ -66,10 +66,13 @@ Write-Host ""
 #
 # windows/posh.d/zprompt.ps1 initialises starship on every shell start, so
 # without this the prompt errors on a fresh machine. The Nerd Font supplies the
-# glyphs that the starship, wezterm and vim-airline configs all assume.
+# glyphs that the starship and vim-airline configs both assume.
+#
+# No terminal emulator is installed here: this repo tracks no emulator config,
+# so whichever one you use (Windows Terminal ships with Windows 11) just needs
+# its font set to FiraCode Nerd Font Mono by hand.
 
 Install-Package -Id 'Starship.Starship'     -Name 'starship'   | Out-Null
-Install-Package -Id 'wez.wezterm'           -Name 'WezTerm'    | Out-Null
 Install-Package -Id 'AutoHotkey.AutoHotkey' -Name 'AutoHotkey' | Out-Null
 
 # Not available through winget - see Install-NerdFont in common.ps1.
@@ -100,11 +103,20 @@ Install-Package -Id 'Microsoft.VisualStudio.2022.BuildTools' -Name 'VS Build Too
 ) | Out-Null
 Write-Host ""
 
+# ─── Rust ─────────────────────────────────────────────────────────────────────
+#
+# rustup rather than a packaged rustc, so toolchains are managed the same way on
+# every platform. Installed after the build tools above on purpose: the default
+# x86_64-pc-windows-msvc toolchain needs the MSVC linker, and rustup only warns
+# about a missing one rather than failing.
+
+Install-Package -Id 'Rustlang.Rustup' -Name 'rustup' | Out-Null
+Write-Host ""
+
 # ─── Additional utilities ─────────────────────────────────────────────────────
 # curl is omitted: curl.exe ships with Windows 10 1803+.
 
 Install-Package -Id '7zip.7zip'            -Name '7-Zip' | Out-Null
-Install-Package -Id 'jqlang.jq'            -Name 'jq'    | Out-Null
 Install-Package -Id 'JernejSimoncic.Wget'  -Name 'wget'  | Out-Null
 Write-Host ""
 
@@ -114,6 +126,7 @@ $ok = Show-PackageFailures
 
 Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build Tools in particular."
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
+Write-Info "cargo and rustc land on PATH in a new shell: rustup show"
 Write-Info "Set your terminal font to 'FiraCode Nerd Font Mono' so prompt glyphs render."
 Write-Host ""
 

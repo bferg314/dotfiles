@@ -114,6 +114,52 @@ function Set-AllPoshProfiles {
 
 # ─── Menu actions ─────────────────────────────────────────────────────────────
 
+# Every version of windows\wezterm\.wezterm.lua this repo ever shipped, hashed
+# with CR stripped (see Get-NormalisedFileHash). Used to recognise a config
+# that came from here when the link back to the repo can no longer be seen.
+$WEZTERM_CONFIG_HASHES = @(
+    '310f135890ccb902ee3aa98210172b3d831337dfb3c71d9c7cbeeeb10fffd628'  # 9df876b, initial config
+    '819f458b83d353b8f93337b50bed20986e670e664f1c2f0652de25b67a47b9ba'  # ed07861, windows parity
+    'a44db385f890e81ddfcf921966a9a182bab3b275b10a4bd8567e4fc5f5313a87'  # dd34575, FiraCode Nerd Font Mono 16
+    '792792a99db2681754c933ef43211dc7005009557b9aec7270a7ed514a79d324'  # ecfa486, font size 15
+)
+
+# wezterm was dropped from the repo, but a machine set up before that still has
+# a ~\.wezterm.lua left over from it. Only configs that came from here are
+# removed - one you wrote or edited yourself is left alone.
+function Remove-LegacyWeztermLink {
+    $path = "$HOME\.wezterm.lua"
+
+    # Get-Item rather than Test-Path: a symlink whose target no longer exists -
+    # exactly the case this cleans up - resolves to $false under Test-Path.
+    $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if ($item.PSIsContainer) { return }
+
+    $ours = $false
+
+    if ($item.LinkType -in @('SymbolicLink', 'HardLink')) {
+        $points = @($item.Target) | ForEach-Object { "$_" }
+        if ($points | Where-Object { $_ -like "*\windows\wezterm\*" }) { $ours = $true }
+    }
+
+    # New-DotfileLink only makes a symlink when Developer Mode is on or the
+    # shell is elevated; otherwise it falls back to a hard link, then to a plain
+    # copy. Neither fallback can be traced back to the repo once the source is
+    # gone - a copy never could, and a hard link reports an empty LinkType and
+    # Target the moment its last sibling is deleted, which is precisely what
+    # dropping wezterm did. Match the content instead so those are cleaned up
+    # too, while anything you changed no longer hashes and so survives.
+    if (-not $ours) {
+        $ours = (Get-NormalisedFileHash $path) -in $WEZTERM_CONFIG_HASHES
+    }
+
+    if (-not $ours) { return }
+
+    Remove-Item -LiteralPath $path -Force
+    Write-Ok "Removed stale ~\.wezterm.lua (wezterm is no longer part of this repo)"
+}
+
 function Set-DotfileLinks {
     Write-Header "Creating Dotfile Links"
 
@@ -125,9 +171,8 @@ function Set-DotfileLinks {
 
     # Out-Null on each: these return a status boolean that would otherwise
     # print a stray "True" between the progress lines.
-    New-DotfileLink -Source "$SCRIPT_DIR\vim\.vimrc"           -Target "$HOME\_vimrc" | Out-Null
-    New-DotfileLink -Source "$SCRIPT_DIR\wezterm\.wezterm.lua" -Target "$HOME\.wezterm.lua" | Out-Null
-    New-DotfileLink -Source "$REPO_ROOT\starship\tokyo.toml"   -Target "$HOME\.config\starship.toml" | Out-Null
+    New-DotfileLink -Source "$SCRIPT_DIR\vim\.vimrc"         -Target "$HOME\_vimrc" | Out-Null
+    New-DotfileLink -Source "$REPO_ROOT\starship\tokyo.toml" -Target "$HOME\.config\starship.toml" | Out-Null
 
     # Not ~\.config\zellij, the path the linux and mac scripts use. On Windows
     # zellij resolves its config through ProjectDirs::from("", "", "Zellij"),
@@ -139,6 +184,8 @@ function Set-DotfileLinks {
     $startup = [Environment]::GetFolderPath('Startup')
     New-DotfileLink -Source "$SCRIPT_DIR\ahk\WindowsShortcuts.ahk" `
                     -Target (Join-Path $startup 'WindowsShortcuts.ahk') | Out-Null
+
+    Remove-LegacyWeztermLink
 
     Write-Host ""
     Set-AllPoshProfiles
@@ -183,7 +230,7 @@ function Install-PowerShell7 {
         Write-Step "Configuring the PowerShell 7 profile..."
         Set-AllPoshProfiles
         Write-Host ""
-        Write-Info "wezterm is already configured to launch pwsh.exe."
+        Write-Info "Point your terminal at pwsh.exe to make it the default shell."
     }
 
     Show-PackageFailures | Out-Null

@@ -92,6 +92,17 @@ pkg_install_devtools() {
     esac
 }
 
+# True when the package manager knows a package name. Used to try a
+# version-pinned name (python3.14) before falling back to the generic one,
+# rather than letting the install fail on distros that do not carry it.
+pkg_available() {
+    case "$PKG_MANAGER" in
+        pacman) pacman -Si "$1" >/dev/null 2>&1 ;;
+        dnf)    dnf list "$1" >/dev/null 2>&1 ;;
+        apt)    apt-cache show "$1" >/dev/null 2>&1 ;;
+    esac
+}
+
 # Add a .repo file by URL, handling both dnf4 and dnf5 syntax.
 # dnf5 (Fedora 41+): config-manager addrepo --from-repofile=URL
 # dnf4 (RHEL/Alma/Rocky): config-manager --add-repo URL
@@ -191,6 +202,44 @@ detect_arch() {
 github_latest_tag() {
     curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
         grep '"tag_name"' | head -n1 | cut -d'"' -f4
+}
+
+# ─── Rust ─────────────────────────────────────────────────────────────────────
+
+# Install rustup from the upstream installer, and put cargo on PATH for the
+# rest of this script.
+#
+# Upstream rather than the distro package: only Arch carries a current `rustup`,
+# while Debian and the RHEL family ship a pinned `rustc` with no toolchain
+# management at all. One source also means Linux, macOS and Windows all end up
+# on the same rustup.
+#
+# --no-modify-path, because rustup would otherwise append its own PATH line to
+# ~/.bashrc, ~/.profile and ~/.zshenv. bashrc.d/rust.bashrc does that instead,
+# so the shell config stays in the repo.
+install_rustup() {
+    if [ -f "$HOME/.cargo/env" ]; then
+        # shellcheck disable=SC1091
+        . "$HOME/.cargo/env"
+    fi
+
+    if command -v rustup >/dev/null 2>&1; then
+        ok "rustup already installed ($(rustup --version 2>/dev/null | head -n1))"
+        rustup update || warn "rustup update failed; the existing toolchain is unchanged"
+        return 0
+    fi
+
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
+        sh -s -- -y --no-modify-path --default-toolchain stable ||
+        { warn "rustup install failed"; return 1; }
+
+    if [ -f "$HOME/.cargo/env" ]; then
+        # shellcheck disable=SC1091
+        . "$HOME/.cargo/env"
+    fi
+
+    command -v rustup >/dev/null 2>&1 || { warn "rustup is not on PATH after install"; return 1; }
+    ok "rustup installed ($(rustup --version 2>/dev/null | head -n1))"
 }
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
