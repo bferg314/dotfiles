@@ -114,6 +114,31 @@ run the setup script as Administrator to get real symlinks.
 Any pre-existing real file at a link target is backed up to `<name>.bak-<timestamp>` before being
 replaced.
 
+## Tests
+
+There is no test framework here — `windows/tests/*.tests.ps1` are plain scripts that print
+PASS/FAIL and exit non-zero on failure. Run one directly:
+
+```powershell
+pwsh -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
+```
+
+They are worth running under **both** hosts, since `setup.ps1` supports Windows PowerShell 5.1 as
+well as PowerShell 7:
+
+```powershell
+powershell -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
+```
+
+Cases that need something the machine may not have are skipped rather than failed — the symlink
+cases need Developer Mode or an elevated shell, and the fixture cases need the git history. A run
+that skips everything still exits 0, so check the counts.
+
+`wezterm-cleanup.tests.ps1` covers `Remove-LegacyWeztermLink`, which deletes the `~\.wezterm.lua`
+left behind on machines set up before wezterm was dropped. It gets the function and its hash table
+out of `setup.ps1` through the PowerShell parser rather than duplicating them, and points `$HOME` at
+a sandbox, so it tests the shipped source without touching your real config.
+
 ## Packages
 
 Installs use **winget**, which ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
