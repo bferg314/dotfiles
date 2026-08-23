@@ -38,13 +38,12 @@ For a brand-new machine, use the repo-root `bootstrap.sh` instead — see the
 |---|---|---|
 | 1 | Create Links | Symlinks `bashrc.d/*` → `~/.bashrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present) |
 | 2 | Install VimPlug | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
-| 3 | Install zsh | Installs `zsh`, optionally Oh My Zsh, optionally `chsh` to zsh |
-| 4 | Install Base Tools | Runs `installs/base.sh` |
-| 5 | Install Desktop Apps | Runs `installs/desktop.sh` |
-| 6 | Install Server Tools | Runs `installs/server.sh` |
-| 7 | Install Avahi (mDNS) | Runs `installs/avahi.sh` |
-| 8 | Update | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
-| 9 | Quit | |
+| 3 | Install Base Tools | Runs `installs/base.sh` |
+| 4 | Install Desktop Apps | Runs `installs/desktop.sh` |
+| 5 | Install Server Tools | Runs `installs/server.sh` |
+| 6 | Install Avahi (mDNS) | Runs `installs/avahi.sh` |
+| 7 | Update | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
+| 8 | Quit | |
 
 ---
 

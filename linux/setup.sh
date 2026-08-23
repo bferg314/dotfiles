@@ -20,19 +20,18 @@ show_menu() {
     echo -e "${NC}"
     echo "  1) Create Links"
     echo "  2) Install VimPlug"
-    echo "  3) Install zsh"
-    echo "  4) Install Base Tools"
-    echo "  5) Install Desktop Apps"
-    echo "  6) Install Server Tools"
-    echo "  7) Install Avahi (mDNS)"
-    echo "  8) Update"
-    echo "  9) Quit"
+    echo "  3) Install Base Tools"
+    echo "  4) Install Desktop Apps"
+    echo "  5) Install Server Tools"
+    echo "  6) Install Avahi (mDNS)"
+    echo "  7) Update"
+    echo "  8) Quit"
     echo
 }
 
 while true; do
     show_menu
-    read -p $'\033[1m\033[0;34mEnter your choice (1-9):\033[0m ' choice
+    read -p $'\033[1m\033[0;34mEnter your choice (1-8):\033[0m ' choice
     echo
     [ -z "$choice" ] && break
 
@@ -94,44 +93,6 @@ fi' >> ~/.zshrc
         echo "  Open vim and run ':PlugInstall' to install your plugins."
         ;;
     3)
-        # Check if zsh is already installed
-        if command -v zsh >/dev/null 2>&1; then
-            echo "✓ zsh is already installed"
-            read -p "Install oh-my-zsh? (y/n) " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-            fi
-        else
-            echo "Installing zsh..."
-            # Detect package manager and install zsh
-            if command -v pacman >/dev/null 2>&1; then
-                sudo pacman -S --noconfirm zsh
-            elif command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get update && sudo apt-get install -y zsh
-            elif command -v dnf >/dev/null 2>&1; then
-                sudo dnf install -y zsh
-            else
-                echo "Unable to detect package manager. Please install zsh manually."
-            fi
-
-            # Offer to install oh-my-zsh
-            read -p "Install oh-my-zsh? (y/n) " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-            fi
-
-            # Offer to change default shell
-            read -p "Set zsh as default shell? (y/n) " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                chsh -s $(which zsh)
-                echo "✓ Default shell changed to zsh (will take effect on next login)"
-            fi
-        fi
-        ;;
-    4)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -139,7 +100,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/base.sh"
         "$SCRIPT_DIR/installs/base.sh"
         ;;
-    5)
+    4)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -147,7 +108,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/desktop.sh"
         "$SCRIPT_DIR/installs/desktop.sh"
         ;;
-    6)
+    5)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -155,7 +116,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/server.sh"
         "$SCRIPT_DIR/installs/server.sh"
         ;;
-    7)
+    6)
         # Get the directory where this script is located
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -163,7 +124,7 @@ fi' >> ~/.zshrc
         chmod +x "$SCRIPT_DIR/installs/avahi.sh"
         "$SCRIPT_DIR/installs/avahi.sh"
         ;;
-    8)
+    7)
         SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
         BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
@@ -191,7 +152,7 @@ fi' >> ~/.zshrc
             fi
         fi
         ;;
-    9)
+    8)
         break
         ;;
     *) echo "Invalid option" ;;
