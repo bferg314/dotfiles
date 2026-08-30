@@ -53,6 +53,20 @@ be mistaken for the answer. `bootstrap.ps1` carries its own trimmed copy, as it 
 `windows/tests/menu.tests.ps1` walks the AST of both files and fails if either calls a DISM cmdlet
 anywhere outside that helper.
 
+### Reading installed state without winget
+
+The `Desktop apps` row reads the Uninstall registry keys, not `winget list`. Parsing winget made a
+*status hint* depend on winget being resolvable, so a shell that could not find it showed `?` —
+no information at all — about apps that were plainly installed. winget still installs things; it is
+just not needed to look at them.
+
+Resolving winget for the install path is its own small problem, since it ships as an App Execution
+Alias on the *user's* PATH: an elevated shell routinely reports it missing on a machine that has it.
+`Get-WingetPath` tries PATH, then `%LOCALAPPDATA%\Microsoft\WindowsApps`, then the `WindowsApps`
+package payload, and `Doctor` prints which of the three answered. (Not `Get-AppxPackage` — `Appx` is
+another Windows PowerShell-only module, so it throws in pwsh, which is precisely the shell needing
+the fallback.)
+
 ### Menu engine (`menu.ps1`)
 The task table, the two pickers, the preflight checks and the runner. `setup.ps1` registers its
 tasks with `Add-MenuTask` and calls `Invoke-Menu`; everything the menu shows is derived from those

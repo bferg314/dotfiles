@@ -89,30 +89,49 @@ function Test-CanSymlink { return ((Test-Admin) -or (Test-DeveloperMode)) }
 # report winget missing on a machine that plainly has it. Fall back to the alias
 # and then to the MSIX package's own install location before believing it.
 $script:WingetPath = $null
+# How it was found, for Doctor -- "winget unavailable" with no further detail
+# has cost enough time already.
+$script:WingetSource = 'not looked for yet'
 
 function Get-WingetPath {
     if ($script:WingetPath) { return $script:WingetPath }
 
     $found = (Get-Command winget -ErrorAction SilentlyContinue).Source
-    if (-not $found) {
+    if ($found) {
+        $script:WingetSource = 'on PATH'
+    }
+
+    if (-not $found -and $env:LOCALAPPDATA) {
         $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
-        if (Test-Path -LiteralPath $alias) { $found = $alias }
+        if (Test-Path -LiteralPath $alias) {
+            $found = $alias
+            $script:WingetSource = 'App Execution Alias (not on this shell PATH)'
+        }
     }
-    if (-not $found) {
-        # Get-AppxPackage is the only route that works when the alias is not on
-        # this shell's PATH at all, which is the elevated case.
-        try {
-            $pkg = Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -ErrorAction Stop |
-                Select-Object -First 1
-            if ($pkg) {
-                $candidate = Join-Path $pkg.InstallLocation 'winget.exe'
-                if (Test-Path -LiteralPath $candidate) { $found = $candidate }
-            }
-        } catch { }
+
+    if (-not $found -and $env:ProgramFiles) {
+        # The MSIX payload itself. Deliberately NOT Get-AppxPackage: Appx is a
+        # Windows PowerShell module, so under PowerShell 7 it throws rather than
+        # answering -- the same trap as the DISM cmdlets, and useless here since
+        # PowerShell 7 is exactly the shell that needs this fallback.
+        $pattern = Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_*_*__8wekyb3d8bbwe\winget.exe'
+        $candidate = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+        if ($candidate) {
+            $found = $candidate.FullName
+            $script:WingetSource = 'WindowsApps package payload'
+        }
     }
+
+    if (-not $found) { $script:WingetSource = 'not found' }
 
     $script:WingetPath = $found
     return $script:WingetPath
+}
+
+function Get-WingetSource {
+    Get-WingetPath | Out-Null
+    return $script:WingetSource
 }
 
 function Test-Winget { return [bool](Get-WingetPath) }

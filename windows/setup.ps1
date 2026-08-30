@@ -301,41 +301,42 @@ function Get-MissingCommands {
     return @($Names | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
 }
 
-# `winget list` once per menu session rather than `winget list --id X` per
-# package: the per-package form shells out each time and would add seconds to
-# every redraw. Cleared after a run so newly installed apps show up.
-$script:WingetListCache = $null
+# Installed-program display names, read from the Uninstall keys once per menu
+# session.
+#
+# Deliberately not `winget list`. That made a *status hint* depend on winget
+# being resolvable, so a shell that could not find winget reported "?" -- no
+# information at all -- about apps that were plainly installed. The registry
+# answers without winget, without shelling out, and without parsing localised
+# table output. winget is still what installs things; it is just no longer
+# needed to look at them.
+$script:InstalledNamesCache = $null
 
-function Get-WingetListText {
-    if ($null -ne $script:WingetListCache) { return $script:WingetListCache }
-    $winget = Get-WingetPath
-    if (-not $winget) {
-        $script:WingetListCache = ''
-        return $script:WingetListCache
+function Get-InstalledDisplayNames {
+    if ($null -ne $script:InstalledNamesCache) { return $script:InstalledNamesCache }
+
+    # Per-machine 64-bit, per-machine 32-bit, and per-user: Spotify and Discord
+    # install per-user, Steam and Firefox per-machine, VS Code either way.
+    $roots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($root in $roots) {
+        foreach ($key in (Get-ChildItem -Path $root -ErrorAction SilentlyContinue)) {
+            $name = (Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue).DisplayName
+            if ($name) { $names.Add($name) }
+        }
     }
-    $previous = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $script:WingetListCache =
-            (& $winget list --accept-source-agreements --disable-interactivity 2>&1 | Out-String)
-    } catch {
-        $script:WingetListCache = ''
-    } finally {
-        $ErrorActionPreference = $previous
-    }
-    return $script:WingetListCache
+
+    $script:InstalledNamesCache = $names.ToArray()
+    return $script:InstalledNamesCache
 }
 
 # Called by the menu engine after a run, so newly installed apps show up.
-function Reset-MenuProbeCache { $script:WingetListCache = $null }
-
-# Winget ids from the given list that do not appear in `winget list`.
-function Get-MissingPackages {
-    param([hashtable]$Packages)
-    $text = Get-WingetListText
-    if (-not $text) { return $null }   # cannot tell
-    return @($Packages.Keys | Where-Object { $text -notlike "*$_*" } | ForEach-Object { $Packages[$_] })
-}
+function Reset-MenuProbeCache { $script:InstalledNamesCache = $null }
 
 function Get-LinksStatus {
     $missing = @()
@@ -381,16 +382,29 @@ function Get-BaseStatus {
 }
 
 function Get-DesktopStatus {
-    $missing = Get-MissingPackages @{
-        'Valve.Steam'                = 'Steam'
-        'Mozilla.Firefox'            = 'Firefox'
-        'Microsoft.VisualStudioCode' = 'VS Code'
-        'Obsidian.Obsidian'          = 'Obsidian'
-        'Spotify.Spotify'            = 'Spotify'
-        'Discord.Discord'            = 'Discord'
-        'Bitwarden.Bitwarden'        = 'Bitwarden'
+    # Matched on the display name the installer registers, which is not the
+    # winget id.
+    $apps = [ordered]@{
+        'Steam'     = 'Steam*'
+        'Firefox'   = 'Mozilla Firefox*'
+        'VS Code'   = 'Microsoft Visual Studio Code*'
+        'Obsidian'  = 'Obsidian*'
+        'Spotify'   = 'Spotify*'
+        'Discord'   = 'Discord*'
+        'Bitwarden' = 'Bitwarden*'
     }
-    if ($null -eq $missing) { return New-MenuStatus -State unknown -Detail 'winget unavailable' }
+
+    $installed = Get-InstalledDisplayNames
+    $missing = @()
+    foreach ($app in $apps.Keys) {
+        $pattern = $apps[$app]
+        $hit = $false
+        foreach ($name in $installed) {
+            if ($name -like $pattern) { $hit = $true; break }
+        }
+        if (-not $hit) { $missing += $app }
+    }
+
     if ($missing.Count -gt 0) {
         return New-MenuStatus -State todo -Detail "missing: $($missing -join ', ')"
     }
@@ -449,7 +463,12 @@ function Show-Doctor {
     Write-Info "os:       $(Get-MenuPlatformLine)"
     Write-Info "repo:     $REPO_ROOT"
     Write-Info "symlinks: $(if (Test-Admin) { 'yes (elevated)' } elseif (Test-DeveloperMode) { 'yes (Developer Mode)' } else { 'no - hard links or copies will be used' })"
-    Write-Info "winget:   $(if (Test-Winget) { "$(& (Get-WingetPath) --version) ($(Get-WingetPath))" } else { 'not installed' })"
+    if (Test-Winget) {
+        Write-Info "winget:   $(& (Get-WingetPath) --version) - $(Get-WingetSource)"
+        Write-Info "          $(Get-WingetPath)"
+    } else {
+        Write-Warn "winget:   not found (PATH, App Execution Alias, WindowsApps payload all checked)"
+    }
     Write-Info "gum:      $(if (Get-Command gum -ErrorAction SilentlyContinue) { (gum --version) } else { 'not installed (menu uses the numbered fallback)' })"
     Write-Host ""
 

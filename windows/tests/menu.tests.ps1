@@ -319,13 +319,19 @@ Test-Case 'Tailscale is in the table but in no preset' {
 # scripts. Every call has to go through the helper, which hands the work to
 # powershell.exe 5.1.
 
+# Cmdlets that live in Windows PowerShell-only modules. DISM and Appx are both
+# backed by COM registered only for Windows PowerShell, so under PowerShell 7
+# they throw rather than answer -- and pwsh is the shell this repo steers you
+# into. Anything reaching for one has to go through the 5.1 helper.
+$WINDOWS_POWERSHELL_ONLY = @('Get-WindowsCapability', 'Add-WindowsCapability', 'Get-AppxPackage')
+
 function Get-CapabilityCallsOutsideHelper {
     param([string]$Path)
 
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$null, [ref]$null)
     $calls = $ast.FindAll({ param($n)
         $n -is [System.Management.Automation.Language.CommandAst] -and
-        $n.GetCommandName() -in @('Get-WindowsCapability', 'Add-WindowsCapability') }, $true)
+        $n.GetCommandName() -in $WINDOWS_POWERSHELL_ONLY }, $true)
 
     $offenders = @()
     foreach ($call in $calls) {
@@ -343,6 +349,12 @@ function Get-CapabilityCallsOutsideHelper {
         }
     }
     return $offenders
+}
+
+Test-Case 'common.ps1 never calls a Windows PowerShell-only cmdlet directly' {
+    $offenders = Get-CapabilityCallsOutsideHelper "$REPO_ROOT/windows/common.ps1"
+    Assert-True ($offenders.Count -eq 0) `
+        "Windows PowerShell-only cmdlets called outside the helper: $($offenders -join '; ')"
 }
 
 Test-Case 'server.ps1 never calls the DISM cmdlets directly' {
@@ -366,6 +378,48 @@ Test-Case 'the capability helper reports a missing Windows PowerShell rather tha
     }
     $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
     Assert-True ("$result" -like 'Failed:*') "expected a Failed: string, got '$result'"
+}
+
+# ─── The desktop probe does not need winget ───────────────────────────────────
+#
+# It used to parse `winget list`, so a shell that could not resolve winget
+# reported "?" -- no information at all -- about apps that were plainly
+# installed. Status is read from the Uninstall keys now. winget still installs
+# things; it is just not needed to look at them.
+
+Test-Case 'the desktop probe makes no winget call' {
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+        "$REPO_ROOT/windows/setup.ps1", [ref]$null, [ref]$null)
+
+    foreach ($name in @('Get-DesktopStatus', 'Get-InstalledDisplayNames')) {
+        $fn = $ast.FindAll({ param($n)
+            $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $n.Name -eq $name }, $true) | Select-Object -First 1
+        Assert-True ($null -ne $fn) "$name not found in setup.ps1"
+
+        $calls = $fn.FindAll({ param($n)
+            $n -is [System.Management.Automation.Language.CommandAst] -and
+            $n.GetCommandName() -in @('winget', 'Get-WingetPath', 'Test-Winget', 'Get-WingetListText') }, $true)
+        Assert-True ($calls.Count -eq 0) `
+            "$name still reaches for winget at line $($calls[0].Extent.StartLineNumber)"
+    }
+}
+
+Test-Case 'the desktop probe answers rather than reporting unknown without winget' {
+    # Lifted out of setup.ps1 through the parser, so this runs the shipped probe.
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+        "$REPO_ROOT/windows/setup.ps1", [ref]$null, [ref]$null)
+    foreach ($name in @('Get-InstalledDisplayNames', 'Get-DesktopStatus')) {
+        $fn = $ast.FindAll({ param($n)
+            $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $n.Name -eq $name }, $true) | Select-Object -First 1
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+
+    # This session has no winget at all, which is the case that used to yield "?".
+    $status = Get-DesktopStatus
+    Assert-True ($status.State -ne 'unknown') `
+        "expected a real answer without winget, got '$($status.State)' / '$($status.Detail)'"
 }
 
 # ─── Result ───────────────────────────────────────────────────────────────────
