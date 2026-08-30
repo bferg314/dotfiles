@@ -34,16 +34,83 @@ For a brand-new machine, use the repo-root `bootstrap.sh` instead — see the
 
 ## Setup Menu (`setup.sh`)
 
-| # | Option | What it does |
-|---|---|---|
-| 1 | Create Links | Symlinks `bashrc.d/*` → `~/.bashrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present) |
-| 2 | Install VimPlug | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
-| 3 | Install Base Tools | Runs `installs/base.sh` |
-| 4 | Install Desktop Apps | Runs `installs/desktop.sh` |
-| 5 | Install Server Tools | Runs `installs/server.sh` |
-| 6 | Install Avahi (mDNS) | Runs `installs/avahi.sh` |
-| 7 | Update | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
-| 8 | Quit | |
+The menu is a checklist, not a list of one-shot options: tick everything this machine
+needs, confirm once, and the tasks run in a fixed order. Each row also shows what is
+already true, so re-running is informed rather than guesswork.
+
+```
+  Dotfiles Setup
+  arch · x86_64 · branch master
+
+  PRESETS
+    [ ] Workstation preset
+    [ ] Server preset
+
+  CONFIGURE
+    [x] Link dotfiles              · not linked
+    [x] Editor plugins             · not installed
+
+  INSTALL
+    [x] Base tools                 · missing: docker, gh, rustup
+    [ ] Desktop apps               ✓ installed
+    [ ] Server tools (SSH)         · sshd not enabled
+    [ ] Tailscale (VPN)            · not installed
+    [ ] Network discovery (mDNS)   · avahi not running
+
+  MAINTAIN
+    [ ] Update from git            ✓ up to date with origin/master
+    [ ] Doctor (full report)
+```
+
+| Task | What it does |
+|---|---|
+| Link dotfiles | Symlinks `bashrc.d/*` → `~/.bashrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present) |
+| Editor plugins | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
+| Base tools | Runs `installs/base.sh` |
+| Desktop apps | Runs `installs/desktop.sh` |
+| Server tools (SSH) | Runs `installs/server.sh` |
+| Tailscale (VPN) | Runs `installs/tailscale.sh` — installs the client and enables `tailscaled`. It does not log in; run `sudo tailscale up` yourself |
+| Network discovery (mDNS) | Runs `installs/avahi.sh` |
+| Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
+| Doctor (full report) | Prints every check in full, plus git identity, detected distro and shell config. Read-only |
+
+The two presets are shortcuts: ticking one replaces it with the tasks it stands for, so
+you can add or remove individual rows afterwards. Tailscale is deliberately in neither —
+joining a tailnet is a per-machine decision, so it is only installed by ticking its row.
+
+The menu opens with the **baseline** this machine is still missing already ticked —
+`Link dotfiles`, `Editor plugins` and `Base tools`. The role-specific tasks
+(`Desktop apps`, `Server tools`, `Tailscale` and `mDNS`) are never preselected,
+however missing they are: on a machine of the other kind, "not installed" is the
+correct permanent state rather than a gap to fill. They arrive from a preset, or
+from your own tick.
+
+Tasks always run in the order above regardless of the order you tick them, and everything
+the batch needs — `sudo`, network — is checked once up front rather than failing halfway
+through. A task that fails does not stop the rest; a summary at the end says what did and
+did not work. Every task is idempotent, so re-running is safe.
+
+### Controls
+
+With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a real
+checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
+installed by `bootstrap.sh` and by `Base tools`, into `/usr/local/bin` — the same place the
+zellij release binary goes, and on PATH everywhere. Without sudo it falls back to
+`~/.local/bin` and says so, since nothing here puts that on PATH.
+
+Both pickers show the same rows, the same grouping and the same status column —
+`gum` just gives you arrow keys and a filter instead of typing numbers.
+
+Without it the same list is numbered and you type at a prompt — no second dependency, and
+it also works over a serial console or with piped input:
+
+| Input | Effect |
+|---|---|
+| `1 3 5` | Toggle those rows |
+| `2-4` | Toggle a range |
+| `a` / `n` | Select all / none |
+| enter | Run what is ticked |
+| `q` | Quit |
 
 ---
 
@@ -151,6 +218,39 @@ Additional actions:
   empty or missing, unless you confirm a second time — that combination locks you
   out of the machine.
 - Validates with `sshd -t` before restarting, and reverts if the config is bad.
+
+---
+
+### `installs/base.sh` also installs `gum`
+
+The setup menu's checklist picker. Fetched from the upstream GitHub release the same way zellij and
+the Nerd Font are, and installed to `/usr/local/bin`. It is optional — the menu falls back to a
+numbered list — so a failure here warns rather than aborting the base install.
+
+### `installs/tailscale.sh` — Tailscale
+
+| Source | Arch | Fedora | RHEL/Alma/Rocky | Debian/Ubuntu |
+|---|---|---|---|---|
+| Tailscale | `install.sh` | `install.sh` | `install.sh` | `install.sh` |
+
+Unlike every other installer here, this uses upstream's
+`curl -fsSL https://tailscale.com/install.sh | sh` on **all** distributions
+rather than configuring the package repository itself. Tailscale's repository
+URLs embed the Fedora release and the apt codename —
+`stable/fedora/39/tailscale.repo`, `stable/ubuntu/noble.noarmor.gpg` — so
+hardcoding that mapping here would 404 on any distro release they have not
+published for yet. Their script resolves it instead, from one code path. (The
+same reasoning as `install_rustup` in `installs/common.sh`, which pipes
+`sh.rustup.rs`.)
+
+Additional actions:
+- Enables and starts `tailscaled`, best-effort: the client is installed by that
+  point, so a machine whose unit is missing or masked gets a warning rather than
+  an aborted script.
+- Skips the download entirely when `tailscale` is already on `PATH`.
+- **Does not log in.** The script prints `sudo tailscale up` and the two flags
+  worth knowing about (`--ssh`, `--advertise-exit-node`) and leaves it to you,
+  so the task stays non-interactive.
 
 ---
 

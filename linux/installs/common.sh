@@ -22,7 +22,10 @@ die()  { echo -e "${RED}✗ $1${NC}" >&2; exit 1; }
 # ─── Distribution detection ───────────────────────────────────────────────────
 
 # Sets PKG_MANAGER (pacman|dnf|apt) and DISTRO (arch|fedora|rhel|debian|ubuntu).
-detect_distro() {
+# Returns 1 on an unsupported platform without printing or exiting: the setup
+# menu wants these values for its header but must stay up without them, while
+# the installers below still treat the same condition as fatal.
+detect_distro_quiet() {
     if command -v pacman >/dev/null 2>&1; then
         PKG_MANAGER="pacman"
         DISTRO="arch"
@@ -45,9 +48,13 @@ detect_distro() {
             fi
         fi
     else
-        die "Unable to detect package manager (pacman, dnf, or apt).
-    Supported: Arch, Fedora, RHEL/AlmaLinux/Rocky, Ubuntu/Debian"
+        return 1
     fi
+}
+
+detect_distro() {
+    detect_distro_quiet || die "Unable to detect package manager (pacman, dnf, or apt).
+    Supported: Arch, Fedora, RHEL/AlmaLinux/Rocky, Ubuntu/Debian"
 
     echo -e "${BLUE}Detected package manager: ${BOLD}$PKG_MANAGER${NC}"
     echo -e "${BLUE}Distribution type: ${BOLD}$DISTRO${NC}"
@@ -240,6 +247,76 @@ install_rustup() {
 
     command -v rustup >/dev/null 2>&1 || { warn "rustup is not on PATH after install"; return 1; }
     ok "rustup installed ($(rustup --version 2>/dev/null | head -n1))"
+}
+
+# ─── gum ──────────────────────────────────────────────────────────────────────
+
+# gum draws the multi-select checklist in the setup menu. It is optional: the
+# menu falls back to a numbered list when it is missing, so a failure here is a
+# warning rather than fatal.
+#
+# Installed per-user into ~/.local/bin from the upstream release, the same way
+# zellij and the Nerd Font are, so every platform ends up on one source. Arch
+# packages it, so take the package there.
+ensure_gum() {
+    step "Installing gum..."
+
+    if command -v gum >/dev/null 2>&1; then
+        ok "gum already installed ($(gum --version 2>/dev/null))"
+        return 0
+    fi
+
+    if [ "$PKG_MANAGER" = "pacman" ]; then
+        pkg_install gum && { ok "gum installed"; return 0; }
+    fi
+
+    local arch
+    arch="$(detect_arch)" || { warn "Unsupported architecture for the gum release: $(uname -m)"; return 1; }
+    # The release assets say arm64 where uname says aarch64.
+    [ "$arch" = "aarch64" ] && arch="arm64"
+
+    local tag version
+    tag="$(github_latest_tag charmbracelet/gum)"
+    [ -n "$tag" ] || { warn "Could not determine the latest gum release (GitHub API rate limit?)"; return 1; }
+    version="${tag#v}"
+
+    local tmp
+    tmp="$(mktemp -d)"
+    # Local trap: the caller's make_tmpdir trap must survive this function.
+    trap 'rm -rf "$tmp"' RETURN
+
+    if ! curl -fsSL "https://github.com/charmbracelet/gum/releases/download/${tag}/gum_${version}_Linux_${arch}.tar.gz" |
+            tar -xz -C "$tmp"; then
+        warn "Failed to download or extract gum ${tag}"
+        return 1
+    fi
+
+    # Older releases put the binary at the archive root, newer ones inside a
+    # versioned directory.
+    local binary
+    binary="$(find "$tmp" -type f -name gum -perm -u+x 2>/dev/null | head -n1)"
+    [ -n "$binary" ] || { warn "No gum binary in the ${tag} archive"; return 1; }
+
+    # /usr/local/bin, the same place the zellij release binary goes in base.sh.
+    # It is on PATH on every supported distro, which ~/.local/bin is not --
+    # nothing in this repo puts that on PATH, so installing there produced a gum
+    # that was present and unfindable, and a menu that silently kept using its
+    # numbered fallback.
+    if sudo install -m 755 "$binary" /usr/local/bin/gum 2>/dev/null; then
+        ok "gum installed ($tag) to /usr/local/bin"
+        return 0
+    fi
+
+    # No sudo: fall back to a per-user install and say what that costs, rather
+    # than leaving the machine with no gum at all.
+    mkdir -p "$HOME/.local/bin"
+    install -m 755 "$binary" "$HOME/.local/bin/gum" || { warn "Could not install gum"; return 1; }
+    ok "gum installed ($tag) to ~/.local/bin"
+
+    case ":$PATH:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) warn "$HOME/.local/bin is not on PATH, so the menu will not find gum until it is" ;;
+    esac
 }
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────

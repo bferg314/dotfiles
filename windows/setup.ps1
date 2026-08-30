@@ -12,6 +12,7 @@ $SCRIPT_DIR = $PSScriptRoot
 $REPO_ROOT = Split-Path $SCRIPT_DIR -Parent
 
 . "$SCRIPT_DIR\common.ps1"
+. "$SCRIPT_DIR\menu.ps1"
 
 $PROFILE_BEGIN = '# >>> dotfiles posh.d >>>'
 $PROFILE_END = '# <<< dotfiles posh.d <<<'
@@ -289,50 +290,252 @@ function Update-Dotfiles {
     }
 }
 
-# ─── Main menu ────────────────────────────────────────────────────────────────
+# ─── Status probes ────────────────────────────────────────────────────────────
+#
+# Each returns a New-MenuStatus for the menu's right-hand column. They must be
+# cheap: they all run on every redraw.
 
-function Show-Menu {
-    Clear-Host
-    Write-Host ""
-    Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║     Dotfiles Setup & Installation      ║" -ForegroundColor Cyan
-    Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  1) Create Links"
-    Write-Host "  2) Install vim-plug"
-    Write-Host "  3) Install PowerShell 7"
-    Write-Host "  4) Install Base Tools"
-    Write-Host "  5) Install Desktop Apps"
-    Write-Host "  6) Install Server Tools (OpenSSH)"
-    Write-Host "  7) Update"
-    Write-Host "  8) Quit"
-    Write-Host ""
+# Names of the given commands that are not on PATH.
+function Get-MissingCommands {
+    param([string[]]$Names)
+    return @($Names | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
 }
 
-while ($true) {
-    Show-Menu
-    $choice = Read-Host "Enter your choice (1-8)"
-    Write-Host ""
+# Installed-program display names, read from the Uninstall keys once per menu
+# session.
+#
+# Deliberately not `winget list`. That made a *status hint* depend on winget
+# being resolvable, so a shell that could not find winget reported "?" -- no
+# information at all -- about apps that were plainly installed. The registry
+# answers without winget, without shelling out, and without parsing localised
+# table output. winget is still what installs things; it is just no longer
+# needed to look at them.
+$script:InstalledNamesCache = $null
 
-    # Checked before the switch: `break` inside a switch exits the switch, not
-    # the enclosing loop.
-    if ([string]::IsNullOrWhiteSpace($choice) -or $choice -eq '8') { break }
+function Get-InstalledDisplayNames {
+    if ($null -ne $script:InstalledNamesCache) { return $script:InstalledNamesCache }
 
-    switch ($choice) {
-        '1' { Set-DotfileLinks }
-        '2' { Install-VimPlug }
-        '3' { Install-PowerShell7 }
-        '4' { Invoke-InstallScript -Name 'base' }
-        '5' { Invoke-InstallScript -Name 'desktop' }
-        '6' { Invoke-InstallScript -Name 'server' }
-        '7' { Update-Dotfiles }
-        default { Write-Warn "Invalid option" }
+    # Per-machine 64-bit, per-machine 32-bit, and per-user: Spotify and Discord
+    # install per-user, Steam and Firefox per-machine, VS Code either way.
+    $roots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($root in $roots) {
+        foreach ($key in (Get-ChildItem -Path $root -ErrorAction SilentlyContinue)) {
+            $name = (Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue).DisplayName
+            if ($name) { $names.Add($name) }
+        }
     }
 
-    Write-Host ""
-    Read-Host "Press Enter to continue" | Out-Null
+    $script:InstalledNamesCache = $names.ToArray()
+    return $script:InstalledNamesCache
 }
 
-Write-Host ""
-Write-Host "Goodbye!" -ForegroundColor Cyan
-Write-Host ""
+# Called by the menu engine after a run, so newly installed apps show up.
+function Reset-MenuProbeCache { $script:InstalledNamesCache = $null }
+
+function Get-LinksStatus {
+    $missing = @()
+    foreach ($path in Get-ProfilePaths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            $missing += Split-Path (Split-Path $path -Parent) -Leaf
+            continue
+        }
+        $content = Get-Content -LiteralPath $path -Raw
+        if ($null -eq $content -or $content -notmatch [regex]::Escape($PROFILE_BEGIN)) {
+            $missing += Split-Path (Split-Path $path -Parent) -Leaf
+        }
+    }
+    if ($missing.Count -gt 0) {
+        return New-MenuStatus -State todo -Detail "posh.d not sourced by: $($missing -join ', ')"
+    }
+    if (-not (Test-Path -LiteralPath "$HOME\_vimrc")) {
+        return New-MenuStatus -State todo -Detail 'profiles configured, ~\_vimrc missing'
+    }
+    return New-MenuStatus -State done -Detail 'linked'
+}
+
+function Get-VimPlugStatus {
+    if (Test-Path -LiteralPath "$HOME\vimfiles\autoload\plug.vim") {
+        return New-MenuStatus -State done -Detail 'installed'
+    }
+    return New-MenuStatus -State todo -Detail 'not installed'
+}
+
+function Get-PowerShell7Status {
+    if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+        return New-MenuStatus -State done -Detail "pwsh $((pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null))"
+    }
+    return New-MenuStatus -State todo -Detail 'not installed'
+}
+
+function Get-BaseStatus {
+    $missing = Get-MissingCommands @('git', 'gh', 'node', 'rustup', 'zellij', 'starship', 'gum')
+    if ($missing.Count -gt 0) {
+        return New-MenuStatus -State todo -Detail "missing: $($missing -join ', ')"
+    }
+    return New-MenuStatus -State done -Detail 'installed'
+}
+
+function Get-DesktopStatus {
+    # Matched on the display name the installer registers, which is not the
+    # winget id.
+    $apps = [ordered]@{
+        'Steam'     = 'Steam*'
+        'Firefox'   = 'Mozilla Firefox*'
+        'VS Code'   = 'Microsoft Visual Studio Code*'
+        'Obsidian'  = 'Obsidian*'
+        'Spotify'   = 'Spotify*'
+        'Discord'   = 'Discord*'
+        'Bitwarden' = 'Bitwarden*'
+    }
+
+    $installed = Get-InstalledDisplayNames
+    $missing = @()
+    foreach ($app in $apps.Keys) {
+        $pattern = $apps[$app]
+        $hit = $false
+        foreach ($name in $installed) {
+            if ($name -like $pattern) { $hit = $true; break }
+        }
+        if (-not $hit) { $missing += $app }
+    }
+
+    if ($missing.Count -gt 0) {
+        return New-MenuStatus -State todo -Detail "missing: $($missing -join ', ')"
+    }
+    return New-MenuStatus -State done -Detail 'installed'
+}
+
+function Get-ServerStatus {
+    $svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
+    if (-not $svc) { return New-MenuStatus -State todo -Detail 'OpenSSH server not installed' }
+    if ($svc.Status -eq 'Running') { return New-MenuStatus -State done -Detail 'sshd running' }
+    return New-MenuStatus -State todo -Detail "sshd $($svc.Status)"
+}
+
+function Get-TailscaleStatus {
+    # Checked on disk as well as on PATH: the installer adds tailscale.exe to
+    # PATH, but not to the PATH of an already running shell, so a fresh install
+    # would otherwise still read as missing until you open a new one.
+    $tailscale = (Get-Command tailscale -ErrorAction SilentlyContinue).Source
+    if (-not $tailscale -and $env:ProgramFiles) {
+        $fallback = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+        if (Test-Path -LiteralPath $fallback) { $tailscale = $fallback }
+    }
+    if (-not $tailscale) { return New-MenuStatus -State todo -Detail 'not installed' }
+
+    # `tailscale ip -4` only answers once the service is up and logged in, so
+    # one call covers both "not running" and "not logged in" -- Doctor is where
+    # the full `tailscale status` belongs. Deliberately not Get-WingetListText:
+    # a winget entry says installed, not connected.
+    $ip = $null
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $ip = (& $tailscale ip -4 2>$null | Select-Object -First 1) } catch { }
+    $ErrorActionPreference = $previous
+
+    if ($ip) { return New-MenuStatus -State done -Detail "up ($ip)" }
+    return New-MenuStatus -State todo -Detail 'installed, not connected'
+}
+
+function Get-UpdateStatus {
+    $branch = git -C $REPO_ROOT rev-parse --abbrev-ref HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail 'not a git repository' }
+    # Exit status alone is not enough: an empty answer here would render as
+    # "<blank> commit(s) behind origin/" rather than saying it cannot tell.
+    if (-not $branch) { return New-MenuStatus -State unknown -Detail 'could not determine the current branch' }
+    $behind = git -C $REPO_ROOT rev-list --count "HEAD..origin/$branch" 2>$null
+    if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail "no origin/$branch to compare against" }
+    if (-not $behind) { return New-MenuStatus -State unknown -Detail "could not compare against origin/$branch" }
+    if ($behind -eq '0') { return New-MenuStatus -State done -Detail "up to date with origin/$branch" }
+    return New-MenuStatus -State todo -Detail "$behind commit(s) behind origin/$branch"
+}
+
+# ─── Doctor ───────────────────────────────────────────────────────────────────
+
+function Show-Doctor {
+    Write-Host "Environment"
+    Write-Info "os:       $(Get-MenuPlatformLine)"
+    Write-Info "repo:     $REPO_ROOT"
+    Write-Info "symlinks: $(if (Test-Admin) { 'yes (elevated)' } elseif (Test-DeveloperMode) { 'yes (Developer Mode)' } else { 'no - hard links or copies will be used' })"
+    if (Test-Winget) {
+        Write-Info "winget:   $(& (Get-WingetPath) --version) - $(Get-WingetSource)"
+        Write-Info "          $(Get-WingetPath)"
+    } else {
+        Write-Warn "winget:   not found (PATH, App Execution Alias, WindowsApps payload all checked)"
+    }
+    Write-Info "gum:      $(if (Get-Command gum -ErrorAction SilentlyContinue) { (gum --version) } else { 'not installed (menu uses the numbered fallback)' })"
+    Write-Host ""
+
+    Write-Host "Git identity"
+    $name = git config --global user.name 2>$null
+    $email = git config --global user.email 2>$null
+    Write-Info "name:     $(if ($name) { $name } else { '(unset)' })"
+    Write-Info "email:    $(if ($email) { $email } else { '(unset)' })"
+    Write-Host ""
+
+    Write-Host "PowerShell profiles"
+    foreach ($path in Get-ProfilePaths) {
+        if (Test-Path -LiteralPath $path) {
+            Write-Ok $path
+        } else {
+            Write-Warn "$path (missing)"
+        }
+    }
+    Write-Host ""
+
+    Write-Host "Tasks"
+    Update-MenuStatus
+    foreach ($task in $script:MenuTasks) {
+        if ($task.State -eq 'none') { continue }
+        if ($task.State -eq 'done') {
+            Write-Ok "$($task.Label): $($task.Detail)"
+        } else {
+            Write-Warn "$($task.Label): $($task.Detail)"
+        }
+    }
+    Write-Host ""
+
+    Show-PackageFailures | Out-Null
+}
+
+# ─── Task table ───────────────────────────────────────────────────────────────
+#
+# Same ids, groups and run order as linux/tasks.sh and mac/tasks.sh, so the
+# three menus read the same. The differences are rows, not forked code: Windows
+# has a `shell` task for PowerShell 7 where Linux has none, and no mDNS row.
+
+Add-MenuTask -Id 'workstation' -Label 'Workstation preset'  -Group presets   -Order 1 `
+    -Expand @('links', 'shell', 'vimplug', 'base', 'desktop')
+Add-MenuTask -Id 'serverpre'   -Label 'Server preset'       -Group presets   -Order 2 `
+    -Expand @('links', 'shell', 'base', 'server')
+
+Add-MenuTask -Id 'links'   -Label 'Link dotfiles'        -Group configure -Order 10 `
+    -Handler { Set-DotfileLinks } -Probe { Get-LinksStatus }
+Add-MenuTask -Id 'shell'   -Label 'Shell (PowerShell 7)' -Group configure -Order 15 `
+    -Handler { Install-PowerShell7 } -Probe { Get-PowerShell7Status } -Flags @('net', 'winget')
+Add-MenuTask -Id 'vimplug' -Label 'Editor plugins'       -Group configure -Order 20 `
+    -Handler { Install-VimPlug } -Probe { Get-VimPlugStatus } -Flags @('net')
+
+Add-MenuTask -Id 'base'    -Label 'Base tools'           -Group install   -Order 30 `
+    -Handler { Invoke-InstallScript -Name 'base' } -Probe { Get-BaseStatus } -Flags @('net', 'winget', 'admin')
+Add-MenuTask -Id 'desktop' -Label 'Desktop apps'         -Group install   -Order 40 `
+    -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget', 'admin', 'optin')
+Add-MenuTask -Id 'server'  -Label 'Server tools (SSH)'   -Group install   -Order 50 `
+    -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'admin', 'optin')
+Add-MenuTask -Id 'tailscale' -Label 'Tailscale (VPN)'     -Group install   -Order 55 `
+    -Handler { Invoke-InstallScript -Name 'tailscale' } -Probe { Get-TailscaleStatus } -Flags @('net', 'winget', 'admin', 'optin')
+
+Add-MenuTask -Id 'update'  -Label 'Update from git'      -Group maintain  -Order 70 `
+    -Handler { Update-Dotfiles } -Probe { Get-UpdateStatus } -Flags @('net')
+Add-MenuTask -Id 'doctor'  -Label 'Doctor (full report)' -Group maintain  -Order 80 `
+    -Handler { Show-Doctor }
+
+# ─── Go ───────────────────────────────────────────────────────────────────────
+
+Invoke-Menu

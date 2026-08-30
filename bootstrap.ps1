@@ -1,4 +1,4 @@
-# bootstrap.ps1 - Day-zero machine setup
+﻿# bootstrap.ps1 - Day-zero machine setup
 # Installs git, vim & UniGetUI, clones dotfiles, configures git identity,
 # generates an SSH key for GitHub, and sets up authorized_keys.
 #
@@ -116,6 +116,52 @@ function Update-SessionPath {
     $env:Path = $entries -join ';'
 }
 
+# A trimmed copy of Install-WindowsCapabilityByPattern from windows/common.ps1 -
+# see the note at the top of this file for why it is duplicated rather than
+# shared.
+#
+# Get-/Add-WindowsCapability are DISM cmdlets, and DISM's COM is registered only
+# for Windows PowerShell, so under PowerShell 7 they fail with "Class not
+# registered" before doing any work. This bootstrap is pasted into whatever
+# shell you happen to have open, which increasingly is pwsh, so the capability
+# work is handed to powershell.exe 5.1 whenever we are not already there.
+#
+# Echoes: Installed, AlreadyInstalled, NotAvailable, or "Failed: <why>".
+function Install-WindowsCapabilityByPattern {
+    param([Parameter(Mandatory)][string]$Pattern)
+
+    $work = {
+        param($Pattern)
+        $ErrorActionPreference = 'Stop'
+        try {
+            $cap = Get-WindowsCapability -Online -Name $Pattern | Select-Object -First 1
+            if (-not $cap) { "RESULT:NotAvailable"; return }
+            if ($cap.State -eq 'Installed') { "RESULT:AlreadyInstalled"; return }
+            Add-WindowsCapability -Online -Name $cap.Name | Out-Null
+            "RESULT:Installed"
+        } catch {
+            "RESULT:Failed: $($_.Exception.Message)"
+        }
+    }
+
+    $output = $null
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        $output = & $work $Pattern
+    } else {
+        $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if (-not (Test-Path -LiteralPath $ps)) {
+            return "Failed: PowerShell 7 cannot service Windows capabilities, and Windows PowerShell 5.1 was not found at $ps"
+        }
+        $command = "& { $($work.ToString()) } '$($Pattern -replace "'", "''")'"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+        $output = & $ps -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1
+    }
+
+    $line = @($output) | Where-Object { "$_" -like 'RESULT:*' } | Select-Object -First 1
+    if (-not $line) { return "Failed: no result from the capability install ($output)" }
+    return ("$line" -replace '^RESULT:', '')
+}
+
 # A trimmed copy of Install-Package from windows/common.ps1 - see the note at
 # the top of this file for why it is duplicated rather than shared.
 function Install-Package {
@@ -129,6 +175,10 @@ function Install-Package {
     try {
         winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
+            # Refreshed even when nothing was installed: an earlier run of this
+            # bootstrap may have put it there, and this session's PATH would
+            # still not know about it.
+            Update-SessionPath
             Write-Ok "$Name already installed"
             return $true
         }
@@ -160,8 +210,8 @@ function Install-Package {
 
     switch ($unsigned) {
         0          { Write-Ok "$Name installed"; Update-SessionPath; return $true }
-        0x8A150061 { Write-Ok "$Name already installed"; return $true }
-        0x8A15002B { Write-Ok "$Name already up to date"; return $true }
+        0x8A150061 { Update-SessionPath; Write-Ok "$Name already installed"; return $true }
+        0x8A15002B { Update-SessionPath; Write-Ok "$Name already up to date"; return $true }
         default {
             Write-Fail "$Name failed (winget exit 0x$('{0:X8}' -f $unsigned))"
             return $false
@@ -253,19 +303,23 @@ function Install-Prerequisite {
     # pre-release channel, so pin the current one.
     Install-Package -Id 'Devolutions.UniGetUI' -Name 'UniGetUI' | Out-Null
 
+    # gum draws the setup menu's checklist. Installed here so the first run of
+    # setup.ps1 after a bootstrap is already the good one; the menu falls back
+    # to a numbered list without it, so a failure is not worth stopping for.
+    Install-Package -Id 'charmbracelet.gum' -Name 'gum' | Out-Null
+
     # ssh-keygen and ssh live here. Present by default on Windows 10 1809+, but
     # not on every image, and installing the capability needs elevation.
     if (Get-Command ssh-keygen -ErrorAction SilentlyContinue) {
         Write-Ok "OpenSSH client already installed"
     } elseif ($IS_ADMIN) {
         Write-Info "Installing the OpenSSH client..."
-        $capability = Get-WindowsCapability -Online -Name 'OpenSSH.Client*' | Select-Object -First 1
-        if ($capability) {
-            Add-WindowsCapability -Online -Name $capability.Name | Out-Null
-            Update-SessionPath
-            Write-Ok "OpenSSH client installed"
-        } else {
-            Write-Warn "OpenSSH client capability not available on this system"
+        $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Client*'
+        switch ($result) {
+            'AlreadyInstalled' { Update-SessionPath; Write-Ok "OpenSSH client already installed" }
+            'Installed'        { Update-SessionPath; Write-Ok "OpenSSH client installed" }
+            'NotAvailable'     { Write-Warn "OpenSSH client capability not available on this system" }
+            default            { Write-Warn "OpenSSH client install failed. $result" }
         }
     } else {
         Write-Warn "ssh-keygen not found - re-run elevated to install the OpenSSH client"
@@ -287,19 +341,35 @@ function Install-SshServer {
 
     # Queried by wildcard: the capability name carries a version suffix that has
     # changed across Windows releases.
-    $capability = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1
+    $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
 
-    if (-not $capability) {
-        Write-Warn "OpenSSH Server capability not available on this system"
-        Write-Separator
-        return
+    switch ($result) {
+        'AlreadyInstalled' { Write-Ok "OpenSSH Server already installed" }
+        'Installed'        { Write-Ok "OpenSSH Server installed" }
+        'NotAvailable' {
+            Write-Warn "OpenSSH Server capability not available on this system"
+            Write-Separator
+            return
+        }
+        default {
+            Write-Warn "OpenSSH Server install failed. $result"
+            Write-Separator
+            return
+        }
     }
 
-    if ($capability.State -eq 'Installed') {
-        Write-Ok "OpenSSH Server already installed"
-    } else {
-        Add-WindowsCapability -Online -Name $capability.Name | Out-Null
-        Write-Ok "OpenSSH Server installed"
+    # The service is registered by the capability install, but not always by the
+    # time that call returns.
+    $service = $null
+    foreach ($attempt in 1..10) {
+        $service = Get-Service sshd -ErrorAction SilentlyContinue
+        if ($service) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $service) {
+        Write-Warn "OpenSSH Server installed but the sshd service never appeared; a reboot may be required"
+        Write-Separator
+        return
     }
 
     Set-Service -Name sshd -StartupType Automatic

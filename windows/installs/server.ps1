@@ -25,18 +25,31 @@ Write-Step "Installing OpenSSH Server..."
 
 # Queried by wildcard: the capability name carries a version suffix
 # (OpenSSH.Server~~~~0.0.1.0) that has changed across Windows releases.
-$capability = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' |
-    Select-Object -First 1
+#
+# Through the helper rather than calling Get-/Add-WindowsCapability directly:
+# those are DISM cmdlets, and DISM's COM is registered only for Windows
+# PowerShell, so in PowerShell 7 they fail with "Class not registered" before
+# doing any work. Since this repo installs pwsh and makes it the default shell,
+# that is the likely shell here.
+$result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
 
-if (-not $capability) {
-    Invoke-Die "OpenSSH Server capability not available on this system."
+switch ($result) {
+    'AlreadyInstalled' { Write-Ok "OpenSSH Server already installed" }
+    'Installed'        { Write-Ok "OpenSSH Server installed" }
+    'NotAvailable'     { Invoke-Die "OpenSSH Server capability not available on this system." }
+    default            { Invoke-Die "OpenSSH Server install failed. $result" }
 }
 
-if ($capability.State -eq 'Installed') {
-    Write-Ok "OpenSSH Server already installed"
-} else {
-    Add-WindowsCapability -Online -Name $capability.Name | Out-Null
-    Write-Ok "OpenSSH Server installed"
+# The service is registered by the capability install, but not always by the
+# time that call returns, so give it a moment before treating it as missing.
+$service = $null
+foreach ($attempt in 1..10) {
+    $service = Get-Service sshd -ErrorAction SilentlyContinue
+    if ($service) { break }
+    Start-Sleep -Milliseconds 500
+}
+if (-not $service) {
+    Invoke-Die "OpenSSH Server installed but the sshd service never appeared. A reboot may be required."
 }
 
 Set-Service -Name sshd -StartupType Automatic
@@ -56,17 +69,41 @@ if (-not (Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction Silentl
 }
 Write-Host ""
 
-# ─── 2. Optional: make PowerShell the default SSH shell ───────────────────────
+# ─── 2. Make PowerShell 7 the default SSH shell ───────────────────────────────
+#
+# Not prompted. Without this key sshd hands you cmd.exe, which is nobody's
+# intent on a machine set up from these dotfiles -- none of the posh.d config
+# loads there.
+#
+# pwsh is resolved on disk as well as on PATH: this runs elevated, and the
+# elevated PATH does not always carry the per-user entries a pwsh install adds.
+Write-Step "Setting the default SSH shell..."
 
-$reply = Read-Host "Use PowerShell as the default shell for SSH sessions? (y/n)"
-if ($reply -match '^[Yy]') {
-    $pwsh = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
-    if (-not $pwsh) { $pwsh = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
-
-    New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell `
-        -Value $pwsh -PropertyType String -Force | Out-Null
-    Write-Ok "Default SSH shell set to $pwsh"
+$shell = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
+if (-not $shell) {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+    $shell = $candidates | Select-Object -First 1
 }
+
+if ($shell) {
+    Write-Ok "Using PowerShell 7: $shell"
+} else {
+    $shell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    Write-Warn "PowerShell 7 not found; falling back to Windows PowerShell 5.1."
+    Write-Warn "  Run the 'Shell (PowerShell 7)' task, then re-run this one."
+}
+
+# The key lives under HKLM:\SOFTWARE\OpenSSH, which does not exist until the
+# capability has been installed at least once.
+if (-not (Test-Path -LiteralPath 'HKLM:\SOFTWARE\OpenSSH')) {
+    New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null
+}
+New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell `
+    -Value $shell -PropertyType String -Force | Out-Null
+Write-Ok "Default SSH shell set to $shell"
 Write-Host ""
 
 # ─── 3. Optional: key-only authentication ─────────────────────────────────────
@@ -149,11 +186,18 @@ Write-Host ""
 
 $reply = Read-Host "Install additional monitoring tools? (Sysinternals Suite, WinDirStat) (y/n)"
 if ($reply -match '^[Yy]') {
-    Assert-Winget
-    Reset-PackageFailures
-    Install-Package -Id 'Microsoft.Sysinternals.Suite' -Name 'Sysinternals Suite' | Out-Null
-    Install-Package -Id 'WinDirStat.WinDirStat'        -Name 'WinDirStat'         | Out-Null
-    Show-PackageFailures | Out-Null
+    # Skipped rather than fatal. Assert-Winget dies, and dying here would throw
+    # away a working SSH server over an optional extra -- which is also why the
+    # menu no longer flags this task as needing winget at all.
+    if (Test-Winget) {
+        Reset-PackageFailures
+        Install-Package -Id 'Microsoft.Sysinternals.Suite' -Name 'Sysinternals Suite' | Out-Null
+        Install-Package -Id 'WinDirStat.WinDirStat'        -Name 'WinDirStat'         | Out-Null
+        Show-PackageFailures | Out-Null
+    } else {
+        Write-Warn "winget not available; skipping the monitoring tools."
+        Write-Warn "  The SSH server above is installed and running regardless."
+    }
 }
 Write-Host ""
 

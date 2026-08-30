@@ -81,8 +81,64 @@ function Test-CanSymlink { return ((Test-Admin) -or (Test-DeveloperMode)) }
 # The Linux side abstracts over pacman/dnf/apt because it has to. Windows has
 # one target: winget, which ships with Windows 10 1809+ and Windows 11.
 
+# Path to winget.exe, or $null when it genuinely is not installed.
+#
+# Get-Command alone is not enough. winget ships as an App Execution Alias in
+# %LOCALAPPDATA%\Microsoft\WindowsApps, and that directory is on the *user's*
+# PATH -- so an elevated shell, or one launched with a stale environment, can
+# report winget missing on a machine that plainly has it. Fall back to the alias
+# and then to the MSIX package's own install location before believing it.
+$script:WingetPath = $null
+# How it was found, for Doctor -- "winget unavailable" with no further detail
+# has cost enough time already.
+$script:WingetSource = 'not looked for yet'
+
+function Get-WingetPath {
+    if ($script:WingetPath) { return $script:WingetPath }
+
+    $found = (Get-Command winget -ErrorAction SilentlyContinue).Source
+    if ($found) {
+        $script:WingetSource = 'on PATH'
+    }
+
+    if (-not $found -and $env:LOCALAPPDATA) {
+        $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
+        if (Test-Path -LiteralPath $alias) {
+            $found = $alias
+            $script:WingetSource = 'App Execution Alias (not on this shell PATH)'
+        }
+    }
+
+    if (-not $found -and $env:ProgramFiles) {
+        # The MSIX payload itself. Deliberately NOT Get-AppxPackage: Appx is a
+        # Windows PowerShell module, so under PowerShell 7 it throws rather than
+        # answering -- the same trap as the DISM cmdlets, and useless here since
+        # PowerShell 7 is exactly the shell that needs this fallback.
+        $pattern = Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_*_*__8wekyb3d8bbwe\winget.exe'
+        $candidate = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+        if ($candidate) {
+            $found = $candidate.FullName
+            $script:WingetSource = 'WindowsApps package payload'
+        }
+    }
+
+    if (-not $found) { $script:WingetSource = 'not found' }
+
+    $script:WingetPath = $found
+    return $script:WingetPath
+}
+
+function Get-WingetSource {
+    Get-WingetPath | Out-Null
+    return $script:WingetSource
+}
+
+function Test-Winget { return [bool](Get-WingetPath) }
+
 function Assert-Winget {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    $winget = Get-WingetPath
+    if (-not $winget) {
         Invoke-Die @"
 winget not found.
     winget ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
@@ -90,9 +146,31 @@ winget not found.
     https://github.com/microsoft/winget-cli/releases
 "@
     }
-    $version = (winget --version) 2>$null
+    $version = (& $winget --version) 2>$null
     Write-Info "winget $version"
     Write-Host ""
+}
+
+# Rebuild this session's PATH from the machine and user values.
+#
+# An installer writes the new entry to the registry, not to the environment of
+# an already running shell -- so without this, `Get-Command gum` still fails
+# right after gum was installed, and the menu's status column reports the thing
+# it just installed as missing.
+function Update-SessionPath {
+    $entries = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($scope in @($env:Path,
+                         [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+                         [Environment]::GetEnvironmentVariable('Path', 'User'))) {
+        foreach ($entry in ($scope -split ';')) {
+            if ($entry -and $seen.Add($entry.TrimEnd('\'))) { $entries.Add($entry) }
+        }
+    }
+
+    $env:Path = $entries -join ';'
 }
 
 # Failures are collected rather than fatal: on Linux `set -e` aborts the run,
@@ -121,7 +199,9 @@ function Test-PackageInstalled {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
+        $winget = Get-WingetPath
+        if (-not $winget) { return $false }
+        & $winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
         return ($LASTEXITCODE -eq 0)
     } finally {
         $ErrorActionPreference = $previous
@@ -151,6 +231,7 @@ function Install-Package {
     Write-Step "Installing $Name..."
 
     if (Test-PackageInstalled -Id $Id) {
+        Update-SessionPath
         Write-Ok "$Name already installed"
         return $true
     }
@@ -165,7 +246,7 @@ function Install-Package {
     # every caller's `if (Install-Package ...)` truthy.
     $argv = @('install', '--id', $Id, '--exact', '--silent', '--disable-interactivity',
               '--accept-package-agreements', '--accept-source-agreements') + $ExtraArgs
-    $proc = Start-Process -FilePath 'winget' -NoNewWindow -Wait -PassThru `
+    $proc = Start-Process -FilePath (Get-WingetPath) -NoNewWindow -Wait -PassThru `
         -ArgumentList (($argv | ForEach-Object { ConvertTo-NativeArg $_ }) -join ' ')
     $code = $proc.ExitCode
 
@@ -175,9 +256,9 @@ function Install-Package {
     $unsigned = $code -band 0xFFFFFFFFL
 
     switch ($unsigned) {
-        0          { Write-Ok "$Name installed"; return $true }
-        0x8A150061 { Write-Ok "$Name already installed"; return $true }  # PACKAGE_ALREADY_INSTALLED
-        0x8A15002B { Write-Ok "$Name already up to date"; return $true } # UPDATE_NOT_APPLICABLE
+        0          { Update-SessionPath; Write-Ok "$Name installed"; return $true }
+        0x8A150061 { Update-SessionPath; Write-Ok "$Name already installed"; return $true }  # PACKAGE_ALREADY_INSTALLED
+        0x8A15002B { Update-SessionPath; Write-Ok "$Name already up to date"; return $true } # UPDATE_NOT_APPLICABLE
         0x8A150101 { Write-Ok "$Name installed"; Write-Warn "reboot required to finish"; return $true }
         0x8A150102 { Write-Ok "$Name installed"; Write-Warn "reboot required"; return $true }
         default {
@@ -186,6 +267,61 @@ function Install-Package {
             return $false
         }
     }
+}
+
+# ─── Windows capabilities (optional features) ─────────────────────────────────
+
+# Install a Windows capability by name pattern, e.g. 'OpenSSH.Server*'.
+# Echoes one of: Installed, AlreadyInstalled, NotAvailable, or "Failed: <why>".
+#
+# The DISM cmdlets behind Get-/Add-WindowsCapability are backed by COM
+# interfaces registered only for Windows PowerShell, so under PowerShell 7 they
+# do not merely misbehave -- Get-WindowsCapability throws "Class not
+# registered" before doing anything. That matters here more than most places:
+# this repo installs PowerShell 7, points the terminal at it, and now makes it
+# the SSH shell, so pwsh is the *likeliest* shell for these scripts to run
+# under. The work is handed to powershell.exe 5.1 in that case.
+#
+# The child reports through a RESULT: marker rather than by exit code or last
+# line of output, so stray DISM progress or warnings cannot be mistaken for the
+# answer.
+function Install-WindowsCapabilityByPattern {
+    param([Parameter(Mandatory)][string]$Pattern)
+
+    $work = {
+        param($Pattern)
+        $ErrorActionPreference = 'Stop'
+        try {
+            $cap = Get-WindowsCapability -Online -Name $Pattern | Select-Object -First 1
+            if (-not $cap) { "RESULT:NotAvailable"; return }
+            if ($cap.State -eq 'Installed') { "RESULT:AlreadyInstalled"; return }
+            Add-WindowsCapability -Online -Name $cap.Name | Out-Null
+            "RESULT:Installed"
+        } catch {
+            "RESULT:Failed: $($_.Exception.Message)"
+        }
+    }
+
+    $output = $null
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        # Already in Windows PowerShell: run it here rather than paying for a
+        # second process, and keep the pre-PowerShell-7 behaviour untouched.
+        $output = & $work $Pattern
+    } else {
+        $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if (-not (Test-Path -LiteralPath $ps)) {
+            return "Failed: PowerShell 7 cannot service Windows capabilities, and Windows PowerShell 5.1 was not found at $ps"
+        }
+        # -EncodedCommand so the scriptblock crosses the process boundary
+        # without any quoting to get wrong.
+        $command = "& { $($work.ToString()) } '$($Pattern -replace "'", "''")'"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+        $output = & $ps -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1
+    }
+
+    $line = @($output) | Where-Object { "$_" -like 'RESULT:*' } | Select-Object -First 1
+    if (-not $line) { return "Failed: no result from the capability install ($output)" }
+    return ("$line" -replace '^RESULT:', '')
 }
 
 # ─── Linking ──────────────────────────────────────────────────────────────────
