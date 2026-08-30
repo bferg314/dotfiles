@@ -1,4 +1,4 @@
-# Tests for the setup-menu engine in windows\menu.ps1, and for the task table
+﻿# Tests for the setup-menu engine in windows\menu.ps1, and for the task table
 # that windows\setup.ps1 registers with it.
 #
 # The table is what the whole menu is derived from -- the listing, the run
@@ -234,10 +234,32 @@ Test-Case 'the SSH task is flagged as needing an elevated shell' {
 }
 
 Test-Case 'every task that installs packages is flagged for winget and network' {
-    foreach ($id in @('shell', 'base', 'desktop', 'server')) {
+    foreach ($id in @('shell', 'base', 'desktop', 'server', 'tailscale')) {
         $task = Get-MenuTask $id
         Assert-True ($task.Flags -contains 'winget') "$id should be flagged winget"
         Assert-True ($task.Flags -contains 'net') "$id should be flagged net"
+    }
+}
+
+# installs/base.ps1, desktop.ps1 and server.ps1 all call Assert-Admin, and the
+# Tailscale package installs a Windows service. Install-Package runs winget with
+# --silent --disable-interactivity, where a UAC prompt fails rather than
+# prompts, so the preflight has to refuse before the run instead of letting
+# Assert-Admin die partway through it.
+Test-Case 'every task whose installer asserts admin is flagged admin' {
+    foreach ($id in @('base', 'desktop', 'server', 'tailscale')) {
+        $task = Get-MenuTask $id
+        Assert-True ($task.Flags -contains 'admin') "$id should be flagged admin"
+    }
+}
+
+# Joining a tailnet is a network-identity decision, so it is only ever done by
+# ticking its own row. Pinned here so a later preset edit has to be deliberate.
+Test-Case 'Tailscale is in the table but in no preset' {
+    Assert-True ($null -ne (Get-MenuTask 'tailscale')) 'no tailscale task in the table'
+    foreach ($preset in ($script:MenuTasks | Where-Object { $_.Group -eq 'presets' })) {
+        Assert-True (-not ($preset.Expand -contains 'tailscale')) `
+            "$($preset.Id) should not expand to tailscale"
     }
 }
 

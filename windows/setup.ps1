@@ -403,6 +403,31 @@ function Get-ServerStatus {
     return New-MenuStatus -State todo -Detail "sshd $($svc.Status)"
 }
 
+function Get-TailscaleStatus {
+    # Checked on disk as well as on PATH: the installer adds tailscale.exe to
+    # PATH, but not to the PATH of an already running shell, so a fresh install
+    # would otherwise still read as missing until you open a new one.
+    $tailscale = (Get-Command tailscale -ErrorAction SilentlyContinue).Source
+    if (-not $tailscale -and $env:ProgramFiles) {
+        $fallback = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+        if (Test-Path -LiteralPath $fallback) { $tailscale = $fallback }
+    }
+    if (-not $tailscale) { return New-MenuStatus -State todo -Detail 'not installed' }
+
+    # `tailscale ip -4` only answers once the service is up and logged in, so
+    # one call covers both "not running" and "not logged in" -- Doctor is where
+    # the full `tailscale status` belongs. Deliberately not Get-WingetListText:
+    # a winget entry says installed, not connected.
+    $ip = $null
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $ip = (& $tailscale ip -4 2>$null | Select-Object -First 1) } catch { }
+    $ErrorActionPreference = $previous
+
+    if ($ip) { return New-MenuStatus -State done -Detail "up ($ip)" }
+    return New-MenuStatus -State todo -Detail 'installed, not connected'
+}
+
 function Get-UpdateStatus {
     $branch = git -C $REPO_ROOT rev-parse --abbrev-ref HEAD 2>$null
     if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail 'not a git repository' }
@@ -474,11 +499,13 @@ Add-MenuTask -Id 'vimplug' -Label 'Editor plugins'       -Group configure -Order
     -Handler { Install-VimPlug } -Probe { Get-VimPlugStatus } -Flags @('net')
 
 Add-MenuTask -Id 'base'    -Label 'Base tools'           -Group install   -Order 30 `
-    -Handler { Invoke-InstallScript -Name 'base' } -Probe { Get-BaseStatus } -Flags @('net', 'winget')
+    -Handler { Invoke-InstallScript -Name 'base' } -Probe { Get-BaseStatus } -Flags @('net', 'winget', 'admin')
 Add-MenuTask -Id 'desktop' -Label 'Desktop apps'         -Group install   -Order 40 `
-    -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget')
+    -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget', 'admin')
 Add-MenuTask -Id 'server'  -Label 'Server tools (SSH)'   -Group install   -Order 50 `
     -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'winget', 'admin')
+Add-MenuTask -Id 'tailscale' -Label 'Tailscale (VPN)'     -Group install   -Order 55 `
+    -Handler { Invoke-InstallScript -Name 'tailscale' } -Probe { Get-TailscaleStatus } -Flags @('net', 'winget', 'admin')
 
 Add-MenuTask -Id 'update'  -Label 'Update from git'      -Group maintain  -Order 70 `
     -Handler { Update-Dotfiles } -Probe { Get-UpdateStatus } -Flags @('net')

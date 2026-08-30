@@ -94,6 +94,30 @@ brew_cask() {
     fi
 }
 
+# ─── Tailscale ────────────────────────────────────────────────────────────────
+
+# Echo the path to the tailscale CLI, or return 1 if it is not installed.
+#
+# The cask puts the binary in /usr/local/bin, which is not on PATH on an Apple
+# Silicon machine whose Homebrew lives in /opt/homebrew, and an App Store
+# install ships it inside the bundle instead. Check all three rather than
+# reporting a working install as missing.
+tailscale_bin() {
+    local candidate
+    if candidate="$(command -v tailscale 2>/dev/null)"; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+    for candidate in /usr/local/bin/tailscale \
+                     /Applications/Tailscale.app/Contents/MacOS/Tailscale; do
+        if [ -x "$candidate" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # ─── Platform ─────────────────────────────────────────────────────────────────
 
 # Machine architecture in the form used by most release tarballs.

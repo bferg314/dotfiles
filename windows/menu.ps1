@@ -1,4 +1,4 @@
-# Setup-menu engine for windows\setup.ps1.
+﻿# Setup-menu engine for windows\setup.ps1.
 #
 # Dot-source this file, do not run it. The counterpart to lib/menu.sh, and
 # deliberately the same shape: the same task-table schema, the same groups, the
@@ -398,7 +398,9 @@ function Test-MenuPreflight {
     # Advisory rather than blocking: a proxy or captive portal can fail this
     # probe on a machine where the actual downloads would have worked, and a
     # false refusal is worse than a slow failure.
-    if ($flags -contains 'net') {
+    # Skipped when something already refused the run: an eight-second probe and
+    # a "continue anyway?" prompt are noise when the answer is already no.
+    if ($flags -contains 'net' -and $ok) {
         Write-Step "Checking network..."
         $reachable = $false
         try {

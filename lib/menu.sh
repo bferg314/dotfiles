@@ -447,7 +447,9 @@ menu_preflight() {
     # Advisory rather than blocking: a proxy or captive portal can fail this
     # probe on a machine where the actual downloads would have worked, and a
     # false refusal is worse than a slow failure.
-    if [ "$need_net" = "1" ]; then
+    # Skipped when sudo already refused the run: an eight-second probe and a
+    # "continue anyway?" prompt are noise when the answer is already no.
+    if [ "$need_net" = "1" ] && [ "$ok" = "1" ]; then
         step "Checking network..."
         if curl -fsS --max-time 8 -o /dev/null https://github.com 2>/dev/null; then
             ok "github.com reachable"

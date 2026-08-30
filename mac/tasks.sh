@@ -95,6 +95,21 @@ status_server() {
     esac
 }
 
+status_tailscale() {
+    local bin ip
+    bin="$(tailscale_bin)" || { printf 'not installed'; return 1; }
+    # `tailscale ip -4` only answers once the daemon is up and logged in, so one
+    # call covers the system-extension approval, "not running" and "not logged
+    # in" alike -- Doctor is where the full `tailscale status` belongs.
+    ip="$("$bin" ip -4 2>/dev/null | head -n1)"
+    if [ -n "$ip" ]; then
+        printf 'up (%s)' "$ip"
+        return 0
+    fi
+    printf 'installed, not connected'
+    return 1
+}
+
 status_update() { menu_update_status; }
 
 # ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -191,6 +206,7 @@ _run_install() {
 task_base()    { _run_install base; }
 task_desktop() { _run_install desktop; }
 task_server()  { _run_install server; }
+task_tailscale() { _run_install tailscale; }
 task_update()  { menu_update_repo; }
 
 task_doctor() {
@@ -263,6 +279,7 @@ menu_task "vimplug    |Editor plugins      |configure|20|task_vimplug|status_vim
 menu_task "base       |Base tools          |install  |30|task_base   |status_base   |net"
 menu_task "desktop    |Desktop apps        |install  |40|task_desktop|status_desktop|net"
 menu_task "server     |Server tools (SSH)  |install  |50|task_server |status_server |net,sudo"
+menu_task "tailscale  |Tailscale (VPN)     |install  |55|task_tailscale|status_tailscale|net"
 
 menu_task "update     |Update from git     |maintain |70|task_update |status_update |net"
 menu_task "doctor     |Doctor (full report)|maintain |80|task_doctor |-             |"

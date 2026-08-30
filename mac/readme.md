@@ -49,11 +49,14 @@ rather than guesswork.
 | Base tools | Runs `installs/base.sh` |
 | Desktop apps | Runs `installs/desktop.sh` |
 | Server tools (SSH) | Runs `installs/server.sh` |
+| Tailscale (VPN) | Runs `installs/tailscale.sh` — installs the `tailscale-app` cask. Approve its system extension in System Settings, then `tailscale up` |
 | Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
 | Doctor (full report) | Prints every check in full, plus git identity, Homebrew version and shell config. Read-only |
 
 The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands
-for, so you can add or remove individual rows afterwards.
+for, so you can add or remove individual rows afterwards. Tailscale is deliberately in
+neither — joining a tailnet is a per-machine decision, so it is only installed by ticking
+its row.
 
 Tasks always run in the order above regardless of the order you tick them, and everything
 the batch needs is checked once up front rather than failing halfway through. A task that

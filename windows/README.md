@@ -88,19 +88,22 @@ guesswork.
 | Link dotfiles | Links every config below and configures both PowerShell profiles |
 | Shell (PowerShell 7) | Installs `pwsh` and configures its profile |
 | Editor plugins | Downloads `plug.vim` for vim and Neovim |
-| Base tools | Core dev tooling |
-| Desktop apps | GUI applications |
+| Base tools | Core dev tooling — **needs Administrator** |
+| Desktop apps | GUI applications — **needs Administrator** |
 | Server tools (SSH) | OpenSSH server + optional key-only hardening — **needs Administrator** |
+| Tailscale (VPN) | Installs the Tailscale client — **needs Administrator**. It does not log in; run `tailscale up` yourself |
 | Update from git | Fast-forwards the repo; a destructive reset requires typing `yes` |
 | Doctor (full report) | Prints every check in full, plus git identity, symlink capability and winget version. Read-only |
 
 The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands
-for, so you can add or remove individual rows afterwards.
+for, so you can add or remove individual rows afterwards. Tailscale is deliberately in
+neither — joining a tailnet is a per-machine decision, so it is only installed by ticking
+its row.
 
 Tasks always run in the order above regardless of the order you tick them, and everything
 the batch needs — winget, an elevated shell, network — is checked once up front rather
-than failing halfway through. Picking `Server tools` in an unelevated shell is refused
-before anything runs, not after. A task that fails does not stop the rest; a summary at
+than failing halfway through. Picking a task whose installer calls `Assert-Admin` in an
+unelevated shell is refused before anything runs, not after. A task that fails does not stop the rest; a summary at
 the end says what did and did not work. Every task is idempotent — re-running it is safe
 and will report what is already in place.
 

@@ -109,6 +109,7 @@ than guesswork.
     [x] Base tools                 · missing: docker, gh, rustup
     [ ] Desktop apps               ✓ installed
     [ ] Server tools (SSH)         · sshd not enabled
+    [ ] Tailscale (VPN)            · installed, not connected
     [ ] Network discovery (mDNS)   · avahi not running
 
   MAINTAIN

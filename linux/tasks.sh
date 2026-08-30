@@ -79,6 +79,21 @@ status_server() {
     return 1
 }
 
+status_tailscale() {
+    command -v tailscale >/dev/null 2>&1 || { printf 'not installed'; return 1; }
+    # `tailscale ip -4` only answers once the daemon is up and logged in, so one
+    # call covers both "not running" and "not logged in" -- Doctor is where the
+    # full `tailscale status` belongs.
+    local ip
+    ip="$(tailscale ip -4 2>/dev/null | head -n1)"
+    if [ -n "$ip" ]; then
+        printf 'up (%s)' "$ip"
+        return 0
+    fi
+    printf 'installed, not connected'
+    return 1
+}
+
 status_mdns() {
     command -v systemctl >/dev/null 2>&1 || { printf 'no systemd'; return 2; }
     if systemctl is-active avahi-daemon >/dev/null 2>&1; then
@@ -147,6 +162,7 @@ _run_install() {
 task_base()    { _run_install base; }
 task_desktop() { _run_install desktop; }
 task_server()  { _run_install server; }
+task_tailscale() { _run_install tailscale; }
 task_mdns()    { _run_install avahi; }
 task_update()  { menu_update_repo; }
 
@@ -215,6 +231,7 @@ menu_task "vimplug    |Editor plugins          |configure|20|task_vimplug|status
 menu_task "base       |Base tools              |install  |30|task_base   |status_base   |net,sudo"
 menu_task "desktop    |Desktop apps            |install  |40|task_desktop|status_desktop|net,sudo"
 menu_task "server     |Server tools (SSH)      |install  |50|task_server |status_server |net,sudo"
+menu_task "tailscale  |Tailscale (VPN)         |install  |55|task_tailscale|status_tailscale|net,sudo"
 menu_task "mdns       |Network discovery (mDNS)|install  |60|task_mdns   |status_mdns   |net,sudo"
 
 menu_task "update     |Update from git         |maintain |70|task_update |status_update |net"

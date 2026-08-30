@@ -54,6 +54,7 @@ already true, so re-running is informed rather than guesswork.
     [x] Base tools                 · missing: docker, gh, rustup
     [ ] Desktop apps               ✓ installed
     [ ] Server tools (SSH)         · sshd not enabled
+    [ ] Tailscale (VPN)            · not installed
     [ ] Network discovery (mDNS)   · avahi not running
 
   MAINTAIN
@@ -68,12 +69,14 @@ already true, so re-running is informed rather than guesswork.
 | Base tools | Runs `installs/base.sh` |
 | Desktop apps | Runs `installs/desktop.sh` |
 | Server tools (SSH) | Runs `installs/server.sh` |
+| Tailscale (VPN) | Runs `installs/tailscale.sh` — installs the client and enables `tailscaled`. It does not log in; run `sudo tailscale up` yourself |
 | Network discovery (mDNS) | Runs `installs/avahi.sh` |
 | Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
 | Doctor (full report) | Prints every check in full, plus git identity, detected distro and shell config. Read-only |
 
 The two presets are shortcuts: ticking one replaces it with the tasks it stands for, so
-you can add or remove individual rows afterwards.
+you can add or remove individual rows afterwards. Tailscale is deliberately in neither —
+joining a tailnet is a per-machine decision, so it is only installed by ticking its row.
 
 Tasks always run in the order above regardless of the order you tick them, and everything
 the batch needs — `sudo`, network — is checked once up front rather than failing halfway
@@ -203,6 +206,33 @@ Additional actions:
   empty or missing, unless you confirm a second time — that combination locks you
   out of the machine.
 - Validates with `sshd -t` before restarting, and reverts if the config is bad.
+
+---
+
+### `installs/tailscale.sh` — Tailscale
+
+| Source | Arch | Fedora | RHEL/Alma/Rocky | Debian/Ubuntu |
+|---|---|---|---|---|
+| Tailscale | `install.sh` | `install.sh` | `install.sh` | `install.sh` |
+
+Unlike every other installer here, this uses upstream's
+`curl -fsSL https://tailscale.com/install.sh | sh` on **all** distributions
+rather than configuring the package repository itself. Tailscale's repository
+URLs embed the Fedora release and the apt codename —
+`stable/fedora/39/tailscale.repo`, `stable/ubuntu/noble.noarmor.gpg` — so
+hardcoding that mapping here would 404 on any distro release they have not
+published for yet. Their script resolves it instead, from one code path. (The
+same reasoning as `install_rustup` in `installs/common.sh`, which pipes
+`sh.rustup.rs`.)
+
+Additional actions:
+- Enables and starts `tailscaled`, best-effort: the client is installed by that
+  point, so a machine whose unit is missing or masked gets a warning rather than
+  an aborted script.
+- Skips the download entirely when `tailscale` is already on `PATH`.
+- **Does not log in.** The script prints `sudo tailscale up` and the two flags
+  worth knowing about (`--ssh`, `--advertise-exit-node`) and leaves it to you,
+  so the task stays non-interactive.
 
 ---
 
