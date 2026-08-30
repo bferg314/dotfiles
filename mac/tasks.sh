@@ -66,7 +66,7 @@ status_shell() {
 
 status_base() {
     local missing
-    missing="$(_missing_commands brew git node rustup zellij)"
+    missing="$(_missing_commands brew git node rustup zellij gum)"
     [ -d "/Applications/Docker.app" ] || missing="${missing:+$missing, }Docker"
     if [ -n "$missing" ]; then
         printf 'missing: %s' "$missing"

@@ -308,7 +308,8 @@ $script:WingetListCache = $null
 
 function Get-WingetListText {
     if ($null -ne $script:WingetListCache) { return $script:WingetListCache }
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    $winget = Get-WingetPath
+    if (-not $winget) {
         $script:WingetListCache = ''
         return $script:WingetListCache
     }
@@ -316,7 +317,7 @@ function Get-WingetListText {
     $ErrorActionPreference = 'Continue'
     try {
         $script:WingetListCache =
-            (winget list --accept-source-agreements --disable-interactivity 2>&1 | Out-String)
+            (& $winget list --accept-source-agreements --disable-interactivity 2>&1 | Out-String)
     } catch {
         $script:WingetListCache = ''
     } finally {
@@ -372,7 +373,7 @@ function Get-PowerShell7Status {
 }
 
 function Get-BaseStatus {
-    $missing = Get-MissingCommands @('git', 'gh', 'node', 'rustup', 'zellij', 'starship')
+    $missing = Get-MissingCommands @('git', 'gh', 'node', 'rustup', 'zellij', 'starship', 'gum')
     if ($missing.Count -gt 0) {
         return New-MenuStatus -State todo -Detail "missing: $($missing -join ', ')"
     }
@@ -448,7 +449,7 @@ function Show-Doctor {
     Write-Info "os:       $(Get-MenuPlatformLine)"
     Write-Info "repo:     $REPO_ROOT"
     Write-Info "symlinks: $(if (Test-Admin) { 'yes (elevated)' } elseif (Test-DeveloperMode) { 'yes (Developer Mode)' } else { 'no - hard links or copies will be used' })"
-    Write-Info "winget:   $(if (Get-Command winget -ErrorAction SilentlyContinue) { (winget --version) } else { 'not installed' })"
+    Write-Info "winget:   $(if (Test-Winget) { "$(& (Get-WingetPath) --version) ($(Get-WingetPath))" } else { 'not installed' })"
     Write-Info "gum:      $(if (Get-Command gum -ErrorAction SilentlyContinue) { (gum --version) } else { 'not installed (menu uses the numbered fallback)' })"
     Write-Host ""
 
@@ -507,7 +508,7 @@ Add-MenuTask -Id 'base'    -Label 'Base tools'           -Group install   -Order
 Add-MenuTask -Id 'desktop' -Label 'Desktop apps'         -Group install   -Order 40 `
     -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget', 'admin', 'optin')
 Add-MenuTask -Id 'server'  -Label 'Server tools (SSH)'   -Group install   -Order 50 `
-    -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'winget', 'admin', 'optin')
+    -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'admin', 'optin')
 Add-MenuTask -Id 'tailscale' -Label 'Tailscale (VPN)'     -Group install   -Order 55 `
     -Handler { Invoke-InstallScript -Name 'tailscale' } -Probe { Get-TailscaleStatus } -Flags @('net', 'winget', 'admin', 'optin')
 

@@ -51,7 +51,7 @@ status_vimplug() {
 
 status_base() {
     local missing
-    missing="$(_missing_commands docker git gh node rustup zellij)"
+    missing="$(_missing_commands docker git gh node rustup zellij gum)"
     if [ -n "$missing" ]; then
         printf 'missing: %s' "$missing"
         return 1

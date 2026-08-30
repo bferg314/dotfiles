@@ -269,11 +269,23 @@ Test-Case 'the SSH task is flagged as needing an elevated shell' {
 }
 
 Test-Case 'every task that installs packages is flagged for winget and network' {
-    foreach ($id in @('shell', 'base', 'desktop', 'server', 'tailscale')) {
+    foreach ($id in @('shell', 'base', 'desktop', 'tailscale')) {
         $task = Get-MenuTask $id
         Assert-True ($task.Flags -contains 'winget') "$id should be flagged winget"
         Assert-True ($task.Flags -contains 'net') "$id should be flagged net"
     }
+}
+
+# Server tools installs OpenSSH through Add-WindowsCapability; only the optional
+# monitoring extras at the end of installs/server.ps1 touch winget, and that
+# step skips itself when winget is missing. Flagging the task meant the
+# preflight refused the whole SSH install on a machine where `Get-Command
+# winget` came up empty -- which an elevated shell routinely does.
+Test-Case 'Server tools is not gated on winget' {
+    $server = Get-MenuTask 'server'
+    Assert-True (-not ($server.Flags -contains 'winget')) `
+        'server installs OpenSSH via Add-WindowsCapability, not winget'
+    Assert-True ($server.Flags -contains 'admin') 'server still needs an elevated shell'
 }
 
 # installs/base.ps1, desktop.ps1 and server.ps1 all call Assert-Admin, and the

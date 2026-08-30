@@ -255,25 +255,52 @@ function Test-MenuGum {
 # prebuilt binary, on all three platforms. We deliberately do not hand-roll a
 # raw-mode equivalent: maintaining a PowerShell ReadKey TUI *and* a bash
 # escape-sequence one is the duplication this rewrite exists to remove.
+#
+# gum draws its own list of whatever options it is given, so this must be the
+# only list on screen: printing the status table above it as well showed every
+# task twice, once with its state and once without. The group and state are
+# folded into the option strings instead, so one list carries everything the
+# numbered fallback shows.
 function Invoke-MenuGumPicker {
-    $labels = @($script:MenuTasks | ForEach-Object { $_.Label })
-    $selected = @($script:MenuTasks |
-        Where-Object { Test-MenuSelected $_.Id } |
-        ForEach-Object { $_.Label }) -join ','
+    $width = ($script:MenuTasks | ForEach-Object { $_.Label.Length } | Measure-Object -Maximum).Maximum
+    $options = @{}
+    $ordered = @()
+    $selected = @()
+
+    foreach ($task in $script:MenuTasks) {
+        $mark = switch ($task.State) {
+            'done'    { '✓' }
+            'todo'    { '·' }
+            'unknown' { '?' }
+            default   { ' ' }
+        }
+
+        # gum --selected takes a comma-separated list, so a comma inside an
+        # option string splits it into two names that match nothing and the
+        # preselection is silently lost. Probe details legitimately contain
+        # them ("missing: firefox, code"), so they are dropped here.
+        $detail = ($task.Detail -replace ',', ' ') -replace '\s+', ' '
+        $group = Get-MenuGroupTitle $task.Group
+
+        $line = ('{0,-9} {1}  {2} {3}' -f $group, $task.Label.PadRight($width), $mark, $detail).TrimEnd()
+
+        $ordered += $line
+        $options[$line] = $task.Id
+        if (Test-MenuSelected $task.Id) { $selected += $line }
+    }
 
     $argv = @('--no-limit', '--header', 'space toggles · / filters · enter confirms · esc quits')
-    if ($selected) { $argv += @('--selected', $selected) }
+    if ($selected.Count -gt 0) { $argv += @('--selected', ($selected -join ',')) }
 
     # Options are passed as arguments rather than piped in, so gum is not left
     # taking options from stdin and keystrokes from the console at once.
-    $chosen = & gum choose @argv @labels
+    $chosen = & gum choose @argv @ordered
     if ($LASTEXITCODE -ne 0) { return $false }
 
     Clear-MenuSelection
-    foreach ($label in @($chosen)) {
-        if (-not $label) { continue }
-        $task = $script:MenuTasks | Where-Object { $_.Label -eq $label } | Select-Object -First 1
-        if ($task) { Select-MenuTask $task.Id }
+    foreach ($line in @($chosen)) {
+        if (-not $line) { continue }
+        if ($options.ContainsKey($line)) { Select-MenuTask $options[$line] }
     }
     return $true
 }
@@ -339,7 +366,6 @@ function Invoke-MenuPicker {
     if (Test-MenuGum) {
         Clear-Host
         Show-MenuHeader
-        Show-MenuList
         return (Invoke-MenuGumPicker)
     }
     return (Invoke-MenuFallbackPicker)
@@ -395,7 +421,7 @@ function Test-MenuPreflight {
 
     if ($flags -contains 'winget') {
         Write-Step "Checking winget..."
-        if (Get-Command winget -ErrorAction SilentlyContinue) {
+        if (Test-Winget) {
             Write-Ok "winget present"
         } else {
             Write-Warn "winget not found; the install tasks cannot run. See windows/README.md."

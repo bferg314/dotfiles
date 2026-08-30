@@ -307,37 +307,58 @@ menu_have_gum() {
 # prebuilt binary, on all three platforms. We deliberately do not hand-roll a
 # raw-mode equivalent: maintaining a bash escape-sequence reader *and* a
 # PowerShell ReadKey one is the duplication this rewrite exists to remove.
+#
+# gum draws its own list of whatever options it is given, so this must be the
+# only list on screen: printing the status table above it as well showed every
+# task twice, once with its state and once without. The group and state are
+# folded into the option strings instead, so one list carries everything the
+# numbered fallback shows.
 _menu_pick_gum() {
-    local i=0 selected="" label chosen
-    local labels
+    local i=0 selected="" chosen width group mark detail line
+    local options
 
-    # Options are passed as arguments rather than piped in. gum accepts either,
-    # but reading them from stdin leaves it taking options from the pipe and
-    # keystrokes from /dev/tty, which breaks anywhere stdin is not a terminal.
-    labels=()
+    width="$(_menu_label_width)"
+    options=()
+
     while [ "$i" -lt "$MENU_ROW_COUNT" ]; do
-        label="$(menu_label "$i")"
-        labels[i]="$label"
-        menu_is_selected "$(menu_id "$i")" && selected="${selected:+$selected,}$label"
+        case "$(menu_state "$i")" in
+            done)    mark="✓" ;;
+            todo)    mark="·" ;;
+            unknown) mark="?" ;;
+            *)       mark=" " ;;
+        esac
+
+        # gum --selected takes a comma-separated list, so a comma inside an
+        # option string splits it into two names that match nothing and the
+        # preselection is silently lost. Probe details legitimately contain
+        # them ("missing: firefox, code"), so they are dropped here.
+        detail="$(printf '%s' "$(menu_detail "$i")" | tr ',' ' ' | tr -s ' ')"
+        group="$(_menu_group_title "$(menu_group "$i")")"
+
+        line="$(printf '%-9s %-*s  %s %s' "$group" "$width" "$(menu_label "$i")" "$mark" "$detail")"
+        line="${line%"${line##*[![:space:]]}"}"
+
+        options[i]="$line"
+        menu_is_selected "$(menu_id "$i")" && selected="${selected:+$selected,}$line"
         i=$((i + 1))
     done
 
     if [ -n "$selected" ]; then
         chosen="$(gum choose --no-limit \
             --header "space toggles · / filters · enter confirms · esc quits" \
-            --selected "$selected" "${labels[@]}")" || return 1
+            --selected "$selected" "${options[@]}")" || return 1
     else
         chosen="$(gum choose --no-limit \
             --header "space toggles · / filters · enter confirms · esc quits" \
-            "${labels[@]}")" || return 1
+            "${options[@]}")" || return 1
     fi
 
     menu_clear_selection
-    while IFS= read -r label; do
-        [ -n "$label" ] || continue
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
         i=0
         while [ "$i" -lt "$MENU_ROW_COUNT" ]; do
-            [ "$(menu_label "$i")" = "$label" ] && menu_select "$(menu_id "$i")"
+            [ "${options[i]}" = "$line" ] && menu_select "$(menu_id "$i")"
             i=$((i + 1))
         done
     done <<EOF
@@ -395,7 +416,6 @@ menu_pick() {
     if menu_have_gum; then
         menu_clear
         menu_header
-        menu_list
         _menu_pick_gum
     else
         _menu_pick_fallback

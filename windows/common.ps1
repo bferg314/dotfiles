@@ -81,8 +81,45 @@ function Test-CanSymlink { return ((Test-Admin) -or (Test-DeveloperMode)) }
 # The Linux side abstracts over pacman/dnf/apt because it has to. Windows has
 # one target: winget, which ships with Windows 10 1809+ and Windows 11.
 
+# Path to winget.exe, or $null when it genuinely is not installed.
+#
+# Get-Command alone is not enough. winget ships as an App Execution Alias in
+# %LOCALAPPDATA%\Microsoft\WindowsApps, and that directory is on the *user's*
+# PATH -- so an elevated shell, or one launched with a stale environment, can
+# report winget missing on a machine that plainly has it. Fall back to the alias
+# and then to the MSIX package's own install location before believing it.
+$script:WingetPath = $null
+
+function Get-WingetPath {
+    if ($script:WingetPath) { return $script:WingetPath }
+
+    $found = (Get-Command winget -ErrorAction SilentlyContinue).Source
+    if (-not $found) {
+        $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
+        if (Test-Path -LiteralPath $alias) { $found = $alias }
+    }
+    if (-not $found) {
+        # Get-AppxPackage is the only route that works when the alias is not on
+        # this shell's PATH at all, which is the elevated case.
+        try {
+            $pkg = Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -ErrorAction Stop |
+                Select-Object -First 1
+            if ($pkg) {
+                $candidate = Join-Path $pkg.InstallLocation 'winget.exe'
+                if (Test-Path -LiteralPath $candidate) { $found = $candidate }
+            }
+        } catch { }
+    }
+
+    $script:WingetPath = $found
+    return $script:WingetPath
+}
+
+function Test-Winget { return [bool](Get-WingetPath) }
+
 function Assert-Winget {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    $winget = Get-WingetPath
+    if (-not $winget) {
         Invoke-Die @"
 winget not found.
     winget ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
@@ -90,7 +127,7 @@ winget not found.
     https://github.com/microsoft/winget-cli/releases
 "@
     }
-    $version = (winget --version) 2>$null
+    $version = (& $winget --version) 2>$null
     Write-Info "winget $version"
     Write-Host ""
 }
@@ -121,7 +158,9 @@ function Test-PackageInstalled {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
+        $winget = Get-WingetPath
+        if (-not $winget) { return $false }
+        & $winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
         return ($LASTEXITCODE -eq 0)
     } finally {
         $ErrorActionPreference = $previous
@@ -165,7 +204,7 @@ function Install-Package {
     # every caller's `if (Install-Package ...)` truthy.
     $argv = @('install', '--id', $Id, '--exact', '--silent', '--disable-interactivity',
               '--accept-package-agreements', '--accept-source-agreements') + $ExtraArgs
-    $proc = Start-Process -FilePath 'winget' -NoNewWindow -Wait -PassThru `
+    $proc = Start-Process -FilePath (Get-WingetPath) -NoNewWindow -Wait -PassThru `
         -ArgumentList (($argv | ForEach-Object { ConvertTo-NativeArg $_ }) -join ' ')
     $code = $proc.ExitCode
 

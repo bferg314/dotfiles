@@ -73,7 +73,7 @@ task is idempotent, so re-running is safe.
 With [`gum`](https://github.com/charmbracelet/gum) installed (`Base tools` installs it),
 the picker is a real checklist — arrow keys, space to toggle, `/` to filter. Without it
 the same list is numbered and you type `1 3 5`, `2-4`, `a`, `n`, enter to run, or `q` to
-quit.
+quit. Both show the same rows, grouping and status column.
 
 Once the links are in place, `dotsetup` reopens this menu from anywhere.
 

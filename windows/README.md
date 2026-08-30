@@ -90,7 +90,7 @@ guesswork.
 | Editor plugins | Downloads `plug.vim` for vim and Neovim |
 | Base tools | Core dev tooling — **needs Administrator** |
 | Desktop apps | GUI applications — **needs Administrator** |
-| Server tools (SSH) | OpenSSH server + optional key-only hardening — **needs Administrator** |
+| Server tools (SSH) | OpenSSH server, PowerShell 7 as the SSH shell, optional key-only hardening — **needs Administrator** |
 | Tailscale (VPN) | Installs the Tailscale client — **needs Administrator**. It does not log in; run `tailscale up` yourself |
 | Update from git | Fast-forwards the repo; a destructive reset requires typing `yes` |
 | Doctor (full report) | Prints every check in full, plus git identity, symlink capability and winget version. Read-only |
@@ -120,6 +120,9 @@ With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a re
 checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
 installed by `bootstrap.ps1` and by `Base tools`.
 
+Both pickers show the same rows, the same grouping and the same status column —
+`gum` just gives you arrow keys and a filter instead of typing numbers.
+
 Without it the same list is numbered and you type at a prompt — no second dependency, and
 it also works with redirected input:
 
@@ -130,6 +133,18 @@ it also works with redirected input:
 | `a` / `n` | Select all / none |
 | enter | Run what is ticked |
 | `q` | Quit |
+
+### SSH sessions get PowerShell 7
+
+`Server tools` sets `HKLM:\SOFTWARE\OpenSSH\DefaultShell` to `pwsh.exe`, unprompted. Without that
+key sshd hands an incoming session `cmd.exe`, where none of the `posh.d` config loads — not what
+anyone setting a machine up from these dotfiles wants. If PowerShell 7 is not installed yet it falls
+back to Windows PowerShell 5.1 and says so; run the `Shell (PowerShell 7)` task and re-run this one.
+
+Installing the OpenSSH server itself goes through `Add-WindowsCapability`, not winget, so the task
+is not gated on winget being available. Only the optional monitoring extras at the end use it, and
+they skip themselves with a warning if it is missing rather than taking a working SSH server down
+with them.
 
 ### What gets linked
 

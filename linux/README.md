@@ -96,6 +96,9 @@ With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a re
 checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
 installed by `bootstrap.sh` and by `Base tools`.
 
+Both pickers show the same rows, the same grouping and the same status column —
+`gum` just gives you arrow keys and a filter instead of typing numbers.
+
 Without it the same list is numbered and you type at a prompt — no second dependency, and
 it also works over a serial console or with piped input:
 
