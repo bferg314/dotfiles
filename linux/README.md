@@ -94,7 +94,9 @@ did not work. Every task is idempotent, so re-running is safe.
 
 With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a real
 checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
-installed by `bootstrap.sh` and by `Base tools`.
+installed by `bootstrap.sh` and by `Base tools`, into `/usr/local/bin` — the same place the
+zellij release binary goes, and on PATH everywhere. Without sudo it falls back to
+`~/.local/bin` and says so, since nothing here puts that on PATH.
 
 Both pickers show the same rows, the same grouping and the same status column —
 `gum` just gives you arrow keys and a filter instead of typing numbers.
@@ -218,6 +220,12 @@ Additional actions:
 - Validates with `sshd -t` before restarting, and reverts if the config is bad.
 
 ---
+
+### `installs/base.sh` also installs `gum`
+
+The setup menu's checklist picker. Fetched from the upstream GitHub release the same way zellij and
+the Nerd Font are, and installed to `/usr/local/bin`. It is optional — the menu falls back to a
+numbered list — so a failure here warns rather than aborting the base install.
 
 ### `installs/tailscale.sh` — Tailscale
 

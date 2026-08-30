@@ -457,6 +457,14 @@ offer_dotfiles_setup() {
     if [ -f "$common" ] && ! command -v gum >/dev/null 2>&1; then
         # shellcheck disable=SC1090
         ( . "$common"; detect_distro_quiet; ensure_gum ) || warn "Continuing without gum"
+
+        # ensure_gum prefers /usr/local/bin, which is already on PATH, but falls
+        # back to ~/.local/bin when there is no sudo. Pick that up for the rest
+        # of this run so the menu we are about to hand off to can see it.
+        case ":$PATH:" in
+            *":$HOME/.local/bin:"*) ;;
+            *) [ -d "$HOME/.local/bin" ] && export PATH="$HOME/.local/bin:$PATH" ;;
+        esac
         echo
     fi
 

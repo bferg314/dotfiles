@@ -175,6 +175,10 @@ function Install-Package {
     try {
         winget list --id $Id --exact --accept-source-agreements 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
+            # Refreshed even when nothing was installed: an earlier run of this
+            # bootstrap may have put it there, and this session's PATH would
+            # still not know about it.
+            Update-SessionPath
             Write-Ok "$Name already installed"
             return $true
         }
@@ -206,8 +210,8 @@ function Install-Package {
 
     switch ($unsigned) {
         0          { Write-Ok "$Name installed"; Update-SessionPath; return $true }
-        0x8A150061 { Write-Ok "$Name already installed"; return $true }
-        0x8A15002B { Write-Ok "$Name already up to date"; return $true }
+        0x8A150061 { Update-SessionPath; Write-Ok "$Name already installed"; return $true }
+        0x8A15002B { Update-SessionPath; Write-Ok "$Name already up to date"; return $true }
         default {
             Write-Fail "$Name failed (winget exit 0x$('{0:X8}' -f $unsigned))"
             return $false

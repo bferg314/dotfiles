@@ -297,13 +297,25 @@ ensure_gum() {
     binary="$(find "$tmp" -type f -name gum -perm -u+x 2>/dev/null | head -n1)"
     [ -n "$binary" ] || { warn "No gum binary in the ${tag} archive"; return 1; }
 
+    # /usr/local/bin, the same place the zellij release binary goes in base.sh.
+    # It is on PATH on every supported distro, which ~/.local/bin is not --
+    # nothing in this repo puts that on PATH, so installing there produced a gum
+    # that was present and unfindable, and a menu that silently kept using its
+    # numbered fallback.
+    if sudo install -m 755 "$binary" /usr/local/bin/gum 2>/dev/null; then
+        ok "gum installed ($tag) to /usr/local/bin"
+        return 0
+    fi
+
+    # No sudo: fall back to a per-user install and say what that costs, rather
+    # than leaving the machine with no gum at all.
     mkdir -p "$HOME/.local/bin"
-    install -m 755 "$binary" "$HOME/.local/bin/gum"
+    install -m 755 "$binary" "$HOME/.local/bin/gum" || { warn "Could not install gum"; return 1; }
     ok "gum installed ($tag) to ~/.local/bin"
 
     case ":$PATH:" in
         *":$HOME/.local/bin:"*) ;;
-        *) info "Add ~/.local/bin to PATH to pick it up in this shell" ;;
+        *) warn "$HOME/.local/bin is not on PATH, so the menu will not find gum until it is" ;;
     esac
 }
 

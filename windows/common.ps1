@@ -151,6 +151,28 @@ winget not found.
     Write-Host ""
 }
 
+# Rebuild this session's PATH from the machine and user values.
+#
+# An installer writes the new entry to the registry, not to the environment of
+# an already running shell -- so without this, `Get-Command gum` still fails
+# right after gum was installed, and the menu's status column reports the thing
+# it just installed as missing.
+function Update-SessionPath {
+    $entries = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($scope in @($env:Path,
+                         [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+                         [Environment]::GetEnvironmentVariable('Path', 'User'))) {
+        foreach ($entry in ($scope -split ';')) {
+            if ($entry -and $seen.Add($entry.TrimEnd('\'))) { $entries.Add($entry) }
+        }
+    }
+
+    $env:Path = $entries -join ';'
+}
+
 # Failures are collected rather than fatal: on Linux `set -e` aborts the run,
 # but a single unavailable package should not stop the other twenty from
 # installing. Show-PackageFailures prints the tally at the end.
@@ -209,6 +231,7 @@ function Install-Package {
     Write-Step "Installing $Name..."
 
     if (Test-PackageInstalled -Id $Id) {
+        Update-SessionPath
         Write-Ok "$Name already installed"
         return $true
     }
@@ -233,9 +256,9 @@ function Install-Package {
     $unsigned = $code -band 0xFFFFFFFFL
 
     switch ($unsigned) {
-        0          { Write-Ok "$Name installed"; return $true }
-        0x8A150061 { Write-Ok "$Name already installed"; return $true }  # PACKAGE_ALREADY_INSTALLED
-        0x8A15002B { Write-Ok "$Name already up to date"; return $true } # UPDATE_NOT_APPLICABLE
+        0          { Update-SessionPath; Write-Ok "$Name installed"; return $true }
+        0x8A150061 { Update-SessionPath; Write-Ok "$Name already installed"; return $true }  # PACKAGE_ALREADY_INSTALLED
+        0x8A15002B { Update-SessionPath; Write-Ok "$Name already up to date"; return $true } # UPDATE_NOT_APPLICABLE
         0x8A150101 { Write-Ok "$Name installed"; Write-Warn "reboot required to finish"; return $true }
         0x8A150102 { Write-Ok "$Name installed"; Write-Warn "reboot required"; return $true }
         default {
