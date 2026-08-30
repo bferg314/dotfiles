@@ -34,6 +34,25 @@ Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`,
 checks. Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
 `linux/installs/common.sh`.
 
+### DISM needs Windows PowerShell, even under pwsh
+
+`Get-WindowsCapability` and `Add-WindowsCapability` are DISM cmdlets, and DISM's COM interfaces are
+registered only for Windows PowerShell. Under PowerShell 7 they do not merely misbehave — they
+throw **"Class not registered"** before doing any work.
+
+That is a trap here specifically, because this repo installs PowerShell 7, points your terminal at
+it, and makes it the SSH shell. pwsh is therefore the *likeliest* shell for these scripts to run
+under, and anything reaching for a Windows capability from one would fail every time.
+
+So nothing calls those cmdlets directly. `Install-WindowsCapabilityByPattern` in `common.ps1` runs
+them inline when already in Windows PowerShell, and otherwise hands the work to `powershell.exe`
+5.1 as an `-EncodedCommand`, reporting back through a `RESULT:` marker so stray DISM output cannot
+be mistaken for the answer. `bootstrap.ps1` carries its own trimmed copy, as it does for
+`Install-Package`, because it is fetched and run on its own.
+
+`windows/tests/menu.tests.ps1` walks the AST of both files and fails if either calls a DISM cmdlet
+anywhere outside that helper.
+
 ### Menu engine (`menu.ps1`)
 The task table, the two pickers, the preflight checks and the runner. `setup.ps1` registers its
 tasks with `Add-MenuTask` and calls `Invoke-Menu`; everything the menu shows is derived from those
@@ -141,10 +160,10 @@ key sshd hands an incoming session `cmd.exe`, where none of the `posh.d` config 
 anyone setting a machine up from these dotfiles wants. If PowerShell 7 is not installed yet it falls
 back to Windows PowerShell 5.1 and says so; run the `Shell (PowerShell 7)` task and re-run this one.
 
-Installing the OpenSSH server itself goes through `Add-WindowsCapability`, not winget, so the task
-is not gated on winget being available. Only the optional monitoring extras at the end use it, and
-they skip themselves with a warning if it is missing rather than taking a working SSH server down
-with them.
+Installing the OpenSSH server itself goes through the Windows capability store, not winget, so the
+task is not gated on winget being available. Only the optional monitoring extras at the end use it,
+and they skip themselves with a warning if it is missing rather than taking a working SSH server
+down with them.
 
 ### What gets linked
 

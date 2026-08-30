@@ -227,6 +227,61 @@ function Install-Package {
     }
 }
 
+# ─── Windows capabilities (optional features) ─────────────────────────────────
+
+# Install a Windows capability by name pattern, e.g. 'OpenSSH.Server*'.
+# Echoes one of: Installed, AlreadyInstalled, NotAvailable, or "Failed: <why>".
+#
+# The DISM cmdlets behind Get-/Add-WindowsCapability are backed by COM
+# interfaces registered only for Windows PowerShell, so under PowerShell 7 they
+# do not merely misbehave -- Get-WindowsCapability throws "Class not
+# registered" before doing anything. That matters here more than most places:
+# this repo installs PowerShell 7, points the terminal at it, and now makes it
+# the SSH shell, so pwsh is the *likeliest* shell for these scripts to run
+# under. The work is handed to powershell.exe 5.1 in that case.
+#
+# The child reports through a RESULT: marker rather than by exit code or last
+# line of output, so stray DISM progress or warnings cannot be mistaken for the
+# answer.
+function Install-WindowsCapabilityByPattern {
+    param([Parameter(Mandatory)][string]$Pattern)
+
+    $work = {
+        param($Pattern)
+        $ErrorActionPreference = 'Stop'
+        try {
+            $cap = Get-WindowsCapability -Online -Name $Pattern | Select-Object -First 1
+            if (-not $cap) { "RESULT:NotAvailable"; return }
+            if ($cap.State -eq 'Installed') { "RESULT:AlreadyInstalled"; return }
+            Add-WindowsCapability -Online -Name $cap.Name | Out-Null
+            "RESULT:Installed"
+        } catch {
+            "RESULT:Failed: $($_.Exception.Message)"
+        }
+    }
+
+    $output = $null
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        # Already in Windows PowerShell: run it here rather than paying for a
+        # second process, and keep the pre-PowerShell-7 behaviour untouched.
+        $output = & $work $Pattern
+    } else {
+        $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if (-not (Test-Path -LiteralPath $ps)) {
+            return "Failed: PowerShell 7 cannot service Windows capabilities, and Windows PowerShell 5.1 was not found at $ps"
+        }
+        # -EncodedCommand so the scriptblock crosses the process boundary
+        # without any quoting to get wrong.
+        $command = "& { $($work.ToString()) } '$($Pattern -replace "'", "''")'"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+        $output = & $ps -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1
+    }
+
+    $line = @($output) | Where-Object { "$_" -like 'RESULT:*' } | Select-Object -First 1
+    if (-not $line) { return "Failed: no result from the capability install ($output)" }
+    return ("$line" -replace '^RESULT:', '')
+}
+
 # ─── Linking ──────────────────────────────────────────────────────────────────
 
 # The `ln -s -f` equivalent, with the fallbacks Windows forces on us.

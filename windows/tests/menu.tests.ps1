@@ -310,6 +310,64 @@ Test-Case 'Tailscale is in the table but in no preset' {
     }
 }
 
+# ─── DISM under PowerShell 7 ──────────────────────────────────────────────────
+#
+# Get-/Add-WindowsCapability are DISM cmdlets whose COM is registered only for
+# Windows PowerShell. Under PowerShell 7 they throw "Class not registered"
+# before doing any work -- and this repo installs pwsh, points the terminal at
+# it, and makes it the SSH shell, so pwsh is the likeliest shell for these
+# scripts. Every call has to go through the helper, which hands the work to
+# powershell.exe 5.1.
+
+function Get-CapabilityCallsOutsideHelper {
+    param([string]$Path)
+
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$null, [ref]$null)
+    $calls = $ast.FindAll({ param($n)
+        $n -is [System.Management.Automation.Language.CommandAst] -and
+        $n.GetCommandName() -in @('Get-WindowsCapability', 'Add-WindowsCapability') }, $true)
+
+    $offenders = @()
+    foreach ($call in $calls) {
+        $node = $call
+        $enclosing = $null
+        while ($node) {
+            if ($node -is [System.Management.Automation.Language.FunctionDefinitionAst]) {
+                $enclosing = $node.Name
+                break
+            }
+            $node = $node.Parent
+        }
+        if ($enclosing -ne 'Install-WindowsCapabilityByPattern') {
+            $offenders += "line $($call.Extent.StartLineNumber) in $(if ($enclosing) { $enclosing } else { '<top level>' })"
+        }
+    }
+    return $offenders
+}
+
+Test-Case 'server.ps1 never calls the DISM cmdlets directly' {
+    $offenders = Get-CapabilityCallsOutsideHelper "$REPO_ROOT/windows/installs/server.ps1"
+    Assert-True ($offenders.Count -eq 0) `
+        "DISM cmdlets called outside the helper, which breaks under pwsh: $($offenders -join '; ')"
+}
+
+Test-Case 'bootstrap.ps1 never calls the DISM cmdlets directly' {
+    $offenders = Get-CapabilityCallsOutsideHelper "$REPO_ROOT/bootstrap.ps1"
+    Assert-True ($offenders.Count -eq 0) `
+        "DISM cmdlets called outside the helper, which breaks under pwsh: $($offenders -join '; ')"
+}
+
+# Exercises the shipped function's PowerShell 7 branch. Off Windows there is no
+# powershell.exe to hand the work to, which is the guard being checked: it must
+# report that as a value, not throw.
+Test-Case 'the capability helper reports a missing Windows PowerShell rather than throwing' {
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        return  # the branch under test only exists on Core
+    }
+    $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
+    Assert-True ("$result" -like 'Failed:*') "expected a Failed: string, got '$result'"
+}
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 Write-Host ""

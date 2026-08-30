@@ -25,18 +25,31 @@ Write-Step "Installing OpenSSH Server..."
 
 # Queried by wildcard: the capability name carries a version suffix
 # (OpenSSH.Server~~~~0.0.1.0) that has changed across Windows releases.
-$capability = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' |
-    Select-Object -First 1
+#
+# Through the helper rather than calling Get-/Add-WindowsCapability directly:
+# those are DISM cmdlets, and DISM's COM is registered only for Windows
+# PowerShell, so in PowerShell 7 they fail with "Class not registered" before
+# doing any work. Since this repo installs pwsh and makes it the default shell,
+# that is the likely shell here.
+$result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
 
-if (-not $capability) {
-    Invoke-Die "OpenSSH Server capability not available on this system."
+switch ($result) {
+    'AlreadyInstalled' { Write-Ok "OpenSSH Server already installed" }
+    'Installed'        { Write-Ok "OpenSSH Server installed" }
+    'NotAvailable'     { Invoke-Die "OpenSSH Server capability not available on this system." }
+    default            { Invoke-Die "OpenSSH Server install failed. $result" }
 }
 
-if ($capability.State -eq 'Installed') {
-    Write-Ok "OpenSSH Server already installed"
-} else {
-    Add-WindowsCapability -Online -Name $capability.Name | Out-Null
-    Write-Ok "OpenSSH Server installed"
+# The service is registered by the capability install, but not always by the
+# time that call returns, so give it a moment before treating it as missing.
+$service = $null
+foreach ($attempt in 1..10) {
+    $service = Get-Service sshd -ErrorAction SilentlyContinue
+    if ($service) { break }
+    Start-Sleep -Milliseconds 500
+}
+if (-not $service) {
+    Invoke-Die "OpenSSH Server installed but the sshd service never appeared. A reboot may be required."
 }
 
 Set-Service -Name sshd -StartupType Automatic
