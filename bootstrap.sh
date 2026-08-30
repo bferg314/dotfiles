@@ -450,6 +450,16 @@ offer_dotfiles_setup() {
         return 0
     fi
 
+    # gum draws the setup menu's checklist. Installed here so the first menu
+    # after a bootstrap is already the good one; the menu falls back to a
+    # numbered list without it, so a failure is not worth stopping for.
+    local common="${DOTFILES_DIR}/linux/installs/common.sh"
+    if [ -f "$common" ] && ! command -v gum >/dev/null 2>&1; then
+        # shellcheck disable=SC1090
+        ( . "$common"; detect_distro_quiet; ensure_gum ) || warn "Continuing without gum"
+        echo
+    fi
+
     echo
     read -p "$(echo -e "${CYAN}  Run linux/setup.sh now for full dotfiles setup? [y/N]: ${NC}")" run_setup
     echo

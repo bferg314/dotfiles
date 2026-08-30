@@ -34,6 +34,12 @@ Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`,
 checks. Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
 `linux/installs/common.sh`.
 
+### Menu engine (`menu.ps1`)
+The task table, the two pickers, the preflight checks and the runner. `setup.ps1` registers its
+tasks with `Add-MenuTask` and calls `Invoke-Menu`; everything the menu shows is derived from those
+rows, so adding a task is one call and the numbering cannot drift out of sync with what the numbers
+do. The counterpart to `lib/menu.sh`, which Linux and macOS share, and deliberately the same shape.
+
 ## Installation
 
 ### Day zero (`bootstrap.ps1`)
@@ -70,19 +76,50 @@ git clone https://github.com/bferg314/dotfiles.git
 .\windows\setup.ps1
 ```
 
-### Menu options
+### Menu tasks
 
-| Option | What it does |
+The menu is a checklist, not a list of one-shot options — the same shape as the Linux and
+macOS ones. Tick everything this machine needs, confirm once, and the tasks run in a fixed
+order. Each row also shows what is already true, so re-running is informed rather than
+guesswork.
+
+| Task | What it does |
 |---|---|
-| 1. Create Links | Links every config below and configures both PowerShell profiles |
-| 2. Install vim-plug | Downloads `plug.vim` for vim and Neovim |
-| 3. Install PowerShell 7 | Installs `pwsh` and configures its profile |
-| 4. Install Base Tools | Core dev tooling — **needs Administrator** |
-| 5. Install Desktop Apps | GUI applications — **needs Administrator** |
-| 6. Install Server Tools | OpenSSH server + optional key-only hardening — **needs Administrator** |
-| 7. Update | Fast-forwards the repo; a destructive reset requires typing `yes` |
+| Link dotfiles | Links every config below and configures both PowerShell profiles |
+| Shell (PowerShell 7) | Installs `pwsh` and configures its profile |
+| Editor plugins | Downloads `plug.vim` for vim and Neovim |
+| Base tools | Core dev tooling |
+| Desktop apps | GUI applications |
+| Server tools (SSH) | OpenSSH server + optional key-only hardening — **needs Administrator** |
+| Update from git | Fast-forwards the repo; a destructive reset requires typing `yes` |
+| Doctor (full report) | Prints every check in full, plus git identity, symlink capability and winget version. Read-only |
 
-Every option is idempotent — re-running it is safe and will report what is already in place.
+The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands
+for, so you can add or remove individual rows afterwards.
+
+Tasks always run in the order above regardless of the order you tick them, and everything
+the batch needs — winget, an elevated shell, network — is checked once up front rather
+than failing halfway through. Picking `Server tools` in an unelevated shell is refused
+before anything runs, not after. A task that fails does not stop the rest; a summary at
+the end says what did and did not work. Every task is idempotent — re-running it is safe
+and will report what is already in place.
+
+### Controls
+
+With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a real
+checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
+installed by `bootstrap.ps1` and by `Base tools`.
+
+Without it the same list is numbered and you type at a prompt — no second dependency, and
+it also works with redirected input:
+
+| Input | Effect |
+|---|---|
+| `1 3 5` | Toggle those rows |
+| `2-4` | Toggle a range |
+| `a` / `n` | Select all / none |
+| enter | Run what is ticked |
+| `q` | Quit |
 
 ### What gets linked
 
@@ -98,16 +135,16 @@ The `posh.d` block is written to the **AllHosts** profile for both Windows Power
 (`Documents\WindowsPowerShell\profile.ps1`) and PowerShell 7 (`Documents\PowerShell\profile.ps1`),
 so it also loads in the VS Code terminal. The block is delimited by
 `# >>> dotfiles posh.d >>>` markers and is rewritten in place on every run, so moving the repo and
-re-running option 1 fixes the paths.
+re-running `Link dotfiles` fixes the paths.
 
-`Create Links` also removes a leftover `~\.wezterm.lua` link on machines set up before wezterm was
+`Link dotfiles` also removes a leftover `~\.wezterm.lua` link on machines set up before wezterm was
 dropped from this repo. A `.wezterm.lua` of your own is left alone — only links pointing into
 `windows\wezterm\` are removed.
 
 ### Symlinks and privileges
 
 Windows only permits unprivileged symlink creation when **Developer Mode** is enabled
-(Settings → System → For developers). Without it, `Create Links` falls back to a hard link, and
+(Settings → System → For developers). Without it, `Link dotfiles` falls back to a hard link, and
 failing that to a plain copy — which will *not* track future repo changes. Enable Developer Mode or
 run the setup script as Administrator to get real symlinks.
 
@@ -121,6 +158,7 @@ PASS/FAIL and exit non-zero on failure. Run one directly:
 
 ```powershell
 pwsh -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
+pwsh -NoProfile -File windows\tests\menu.tests.ps1
 ```
 
 They are worth running under **both** hosts, since `setup.ps1` supports Windows PowerShell 5.1 as

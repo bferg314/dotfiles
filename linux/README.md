@@ -34,16 +34,68 @@ For a brand-new machine, use the repo-root `bootstrap.sh` instead — see the
 
 ## Setup Menu (`setup.sh`)
 
-| # | Option | What it does |
-|---|---|---|
-| 1 | Create Links | Symlinks `bashrc.d/*` → `~/.bashrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present) |
-| 2 | Install VimPlug | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
-| 3 | Install Base Tools | Runs `installs/base.sh` |
-| 4 | Install Desktop Apps | Runs `installs/desktop.sh` |
-| 5 | Install Server Tools | Runs `installs/server.sh` |
-| 6 | Install Avahi (mDNS) | Runs `installs/avahi.sh` |
-| 7 | Update | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
-| 8 | Quit | |
+The menu is a checklist, not a list of one-shot options: tick everything this machine
+needs, confirm once, and the tasks run in a fixed order. Each row also shows what is
+already true, so re-running is informed rather than guesswork.
+
+```
+  Dotfiles Setup
+  arch · x86_64 · branch master
+
+  PRESETS
+    [ ] Workstation preset
+    [ ] Server preset
+
+  CONFIGURE
+    [x] Link dotfiles              · not linked
+    [x] Editor plugins             · not installed
+
+  INSTALL
+    [x] Base tools                 · missing: docker, gh, rustup
+    [ ] Desktop apps               ✓ installed
+    [ ] Server tools (SSH)         · sshd not enabled
+    [ ] Network discovery (mDNS)   · avahi not running
+
+  MAINTAIN
+    [ ] Update from git            ✓ up to date with origin/master
+    [ ] Doctor (full report)
+```
+
+| Task | What it does |
+|---|---|
+| Link dotfiles | Symlinks `bashrc.d/*` → `~/.bashrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present) |
+| Editor plugins | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
+| Base tools | Runs `installs/base.sh` |
+| Desktop apps | Runs `installs/desktop.sh` |
+| Server tools (SSH) | Runs `installs/server.sh` |
+| Network discovery (mDNS) | Runs `installs/avahi.sh` |
+| Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
+| Doctor (full report) | Prints every check in full, plus git identity, detected distro and shell config. Read-only |
+
+The two presets are shortcuts: ticking one replaces it with the tasks it stands for, so
+you can add or remove individual rows afterwards.
+
+Tasks always run in the order above regardless of the order you tick them, and everything
+the batch needs — `sudo`, network — is checked once up front rather than failing halfway
+through. A task that fails does not stop the rest; a summary at the end says what did and
+did not work. Every task is idempotent, so re-running is safe.
+
+### Controls
+
+With [`gum`](https://github.com/charmbracelet/gum) installed, the picker is a real
+checklist: arrow keys to move, space to toggle, `/` to filter, enter to confirm. `gum` is
+installed by `bootstrap.sh` and by `Base tools`.
+
+Without it the same list is numbered and you type at a prompt — no second dependency, and
+it also works over a serial console or with piped input:
+
+| Input | Effect |
+|---|---|
+| `1 3 5` | Toggle those rows |
+| `2-4` | Toggle a range |
+| `a` / `n` | Select all / none |
+| enter | Run what is ticked |
+| `q` | Quit |
 
 ---
 

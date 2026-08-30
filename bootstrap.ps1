@@ -253,6 +253,11 @@ function Install-Prerequisite {
     # pre-release channel, so pin the current one.
     Install-Package -Id 'Devolutions.UniGetUI' -Name 'UniGetUI' | Out-Null
 
+    # gum draws the setup menu's checklist. Installed here so the first run of
+    # setup.ps1 after a bootstrap is already the good one; the menu falls back
+    # to a numbered list without it, so a failure is not worth stopping for.
+    Install-Package -Id 'charmbracelet.gum' -Name 'gum' | Out-Null
+
     # ssh-keygen and ssh live here. Present by default on Windows 10 1809+, but
     # not on every image, and installing the capability needs elevation.
     if (Get-Command ssh-keygen -ErrorAction SilentlyContinue) {

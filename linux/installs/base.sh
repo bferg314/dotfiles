@@ -94,6 +94,11 @@ fi
 ok "zellij installed"
 echo
 
+# 3a. Install gum, which draws the setup menu's checklist.
+# set -e is active, and the menu works without it, so a failure only warns.
+ensure_gum || warn "Continuing without gum; the setup menu will use its numbered fallback."
+echo
+
 # 3b. Install the terminal font
 # set -e is active, and a missing font should not abort the whole base install.
 install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono' || \

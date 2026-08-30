@@ -83,6 +83,14 @@ if (-not (Install-NerdFont -Archive 'FiraCode' `
 }
 Write-Host ""
 
+# ─── Setup menu ───────────────────────────────────────────────────────────────
+#
+# gum draws the checklist in setup.ps1. The menu falls back to a numbered list
+# without it, so this is a convenience rather than a requirement.
+
+Install-Package -Id 'charmbracelet.gum' -Name 'gum' | Out-Null
+Write-Host ""
+
 # ─── Terminal multiplexer ─────────────────────────────────────────────────────
 #
 # The counterpart to the zellij section of linux/installs/base.sh. Upstream now

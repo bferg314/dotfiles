@@ -36,11 +36,39 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script provides options to:
-- Create symbolic links for all dotfiles
-- Install Vim-Plug
-- Install Oh My Zsh
-- Update the repository
+The setup script is a checklist, not a list of one-shot options — the same shape as the
+Linux and Windows ones. Tick everything this machine needs, confirm once, and the tasks
+run in a fixed order. Each row also shows what is already true, so re-running is informed
+rather than guesswork.
+
+| Task | What it does |
+|---|---|
+| Link dotfiles | Symlinks `zshrc.d/*` → `~/.zshrc.d/`, `vim/.vimrc` → `~/.vimrc`, `zellij/config.kdl` → `~/.config/zellij/config.kdl`, and appends a `~/.zshrc.d` sourcing block to `~/.zshrc` (and `~/.bashrc` if present) |
+| Shell (zsh) | Installs zsh if missing, then offers oh-my-zsh and making zsh the default shell |
+| Editor plugins | Downloads `plug.vim` for vim and Neovim |
+| Base tools | Runs `installs/base.sh` |
+| Desktop apps | Runs `installs/desktop.sh` |
+| Server tools (SSH) | Runs `installs/server.sh` |
+| Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
+| Doctor (full report) | Prints every check in full, plus git identity, Homebrew version and shell config. Read-only |
+
+The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands
+for, so you can add or remove individual rows afterwards.
+
+Tasks always run in the order above regardless of the order you tick them, and everything
+the batch needs is checked once up front rather than failing halfway through. A task that
+fails does not stop the rest; a summary at the end says what did and did not work. Every
+task is idempotent, so re-running is safe.
+
+With [`gum`](https://github.com/charmbracelet/gum) installed (`Base tools` installs it),
+the picker is a real checklist — arrow keys, space to toggle, `/` to filter. Without it
+the same list is numbered and you type `1 3 5`, `2-4`, `a`, `n`, enter to run, or `q` to
+quit.
+
+Once the links are in place, `dotsetup` reopens this menu from anywhere.
+
+The menu engine is shared with Linux (`lib/menu.sh`); only the task table in `tasks.sh`
+differs. It runs under the bash 3.2 that macOS ships.
 
 ## Features
 
