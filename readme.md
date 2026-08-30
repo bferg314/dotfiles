@@ -117,6 +117,12 @@ than guesswork.
     [ ] Doctor (full report)
 ```
 
+The menu opens with the baseline a machine is still missing already ticked — links, editor
+plugins, shell and base tools. Role-specific tasks (desktop apps, server tools, Tailscale, mDNS)
+are never preselected however missing they are, because on a machine of the other kind "not
+installed" is the correct permanent state rather than a gap to fill; those come from a preset or
+your own tick.
+
 Everything the batch needs — `sudo` or an elevated shell, winget, network — is checked once before
 anything runs, rather than failing halfway through. A task that fails does not stop the rest, and a
 summary at the end says what did and did not work.

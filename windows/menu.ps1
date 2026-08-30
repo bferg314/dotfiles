@@ -130,12 +130,20 @@ function Select-MenuAll {
     }
 }
 
-# Anything the machine still needs, in the groups worth defaulting on. Maintain
-# tasks (update, doctor) are never preselected -- they are things you ask for.
+# The baseline this machine is still missing.
+#
+# Two things are deliberately never preselected. Maintain tasks (update, doctor)
+# are things you ask for. And so is anything flagged `optin`: for a role-specific
+# task, "not installed" is not a gap to be filled, it is the correct permanent
+# state on a machine of the other kind. Without that distinction a server -- where
+# desktop apps are absent by design -- opens with Steam and Discord ticked, and
+# the one destructive direction becomes the default.
 function Select-MenuDefaults {
     Clear-MenuSelection
     foreach ($task in $script:MenuTasks) {
-        if ($task.Group -in @('configure', 'install') -and $task.State -eq 'todo') {
+        if ($task.Group -in @('configure', 'install') -and
+            $task.State -eq 'todo' -and
+            -not ($task.Flags -contains 'optin')) {
             Select-MenuTask $task.Id
         }
     }

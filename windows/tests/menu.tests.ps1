@@ -70,6 +70,7 @@ function Add-SampleTable {
     Add-MenuTask -Id 'links' -Label 'Links'  -Group configure -Order 10 -Handler { 'links' } -Probe { New-MenuStatus -State todo -Detail 'no' }
     Add-MenuTask -Id 'base' -Label 'Base'    -Group install   -Order 30 -Handler { 'base' }  -Probe { New-MenuStatus -State todo -Detail 'no' } -Flags @('net', 'winget')
     Add-MenuTask -Id 'done' -Label 'Done'    -Group install   -Order 40 -Handler { 'done' }  -Probe { New-MenuStatus -State done -Detail 'yes' }
+    Add-MenuTask -Id 'opt'  -Label 'Optional' -Group install  -Order 50 -Handler { 'opt' }   -Probe { New-MenuStatus -State todo -Detail 'no' } -Flags @('optin')
     Add-MenuTask -Id 'upd'  -Label 'Update'  -Group maintain  -Order 70 -Handler { 'upd' }   -Probe { New-MenuStatus -State todo -Detail 'behind' }
 }
 
@@ -113,15 +114,36 @@ Test-Case 'defaults preselect only outstanding configure/install tasks' {
     Add-SampleTable
     Update-MenuStatus
     Select-MenuDefaults
-    # 'done' is already installed and 'upd' is a maintain task, so neither.
+    # 'done' is already installed, 'upd' is a maintain task, and 'opt' is
+    # opt-in, so none of the three.
     Assert-Equal @('links', 'base') $script:MenuSelected
+}
+
+# For a role-specific task "not installed" is the correct permanent state on a
+# machine of the other kind, not a gap to fill. Without this a server -- where
+# desktop apps are absent by design -- opened with Steam and Discord ticked.
+Test-Case 'an opt-in task is never preselected, however outstanding' {
+    Add-SampleTable
+    Update-MenuStatus
+    Assert-Equal 'todo' (Get-MenuTask 'opt').State
+    Select-MenuDefaults
+    Assert-True (-not (Test-MenuSelected 'opt')) 'an optin task must not be preselected'
+}
+
+Test-Case 'opt-in still selects by hand, by preset and by select-all' {
+    Add-SampleTable
+    Select-MenuTask 'opt'
+    Assert-True (Test-MenuSelected 'opt') 'ticking an optin row must still work'
+    Clear-MenuSelection
+    Select-MenuAll
+    Assert-True (Test-MenuSelected 'opt') 'select-all must still include optin rows'
 }
 
 Test-Case 'select all skips presets' {
     Add-SampleTable
     Select-MenuAll
     Assert-True (-not (Test-MenuSelected 'pre')) 'presets are not tasks'
-    Assert-Equal @('links', 'base', 'done', 'upd') $script:MenuSelected
+    Assert-Equal @('links', 'base', 'done', 'opt', 'upd') $script:MenuSelected
 }
 
 Test-Case 'a probe that throws renders as unknown rather than taking the menu down' {
@@ -163,7 +185,7 @@ Test-Case 'empty input runs, q quits, a/n select all and none' {
     Assert-Equal 'run'  (Update-MenuSelectionFromInput '')
     Assert-Equal 'quit' (Update-MenuSelectionFromInput 'q')
     $null = Update-MenuSelectionFromInput 'a'
-    Assert-True ($script:MenuSelected.Count -eq 4) 'a should select every task'
+    Assert-True ($script:MenuSelected.Count -eq 5) 'a should select every task'
     $null = Update-MenuSelectionFromInput 'n'
     Assert-True ($script:MenuSelected.Count -eq 0) 'n should clear the selection'
 }
@@ -224,6 +246,19 @@ Test-Case 'every preset in setup.ps1 expands to tasks that exist and can run' {
             Assert-True ($null -ne $target) "$($preset.Id) expands to unknown id '$id'"
             Assert-True ($null -ne $target.Handler) "$($preset.Id) expands to '$id', which has no handler"
         }
+    }
+}
+
+# The split the menu's defaults depend on: a baseline every machine wants, and
+# role-specific tasks that only ever arrive via a preset or your own tick.
+Test-Case 'the shipped table marks exactly the role-specific tasks opt-in' {
+    $optin = @($script:MenuTasks | Where-Object { $_.Flags -contains 'optin' } |
+        ForEach-Object { $_.Id } | Sort-Object)
+    Assert-Equal @('desktop', 'server', 'tailscale') $optin
+
+    foreach ($id in @('links', 'shell', 'vimplug', 'base')) {
+        $task = Get-MenuTask $id
+        Assert-True (-not ($task.Flags -contains 'optin')) "$id is baseline, not opt-in"
     }
 }
 

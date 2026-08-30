@@ -277,9 +277,9 @@ menu_task "shell      |Shell (zsh)         |configure|15|task_shell  |status_she
 menu_task "vimplug    |Editor plugins      |configure|20|task_vimplug|status_vimplug|net"
 
 menu_task "base       |Base tools          |install  |30|task_base   |status_base   |net"
-menu_task "desktop    |Desktop apps        |install  |40|task_desktop|status_desktop|net"
-menu_task "server     |Server tools (SSH)  |install  |50|task_server |status_server |net,sudo"
-menu_task "tailscale  |Tailscale (VPN)     |install  |55|task_tailscale|status_tailscale|net"
+menu_task "desktop    |Desktop apps        |install  |40|task_desktop|status_desktop|net,optin"
+menu_task "server     |Server tools (SSH)  |install  |50|task_server |status_server |net,sudo,optin"
+menu_task "tailscale  |Tailscale (VPN)     |install  |55|task_tailscale|status_tailscale|net,optin"
 
 menu_task "update     |Update from git     |maintain |70|task_update |status_update |net"
 menu_task "doctor     |Doctor (full report)|maintain |80|task_doctor |-             |"

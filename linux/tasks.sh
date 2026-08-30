@@ -229,10 +229,10 @@ menu_task "links      |Link dotfiles           |configure|10|task_links  |status
 menu_task "vimplug    |Editor plugins          |configure|20|task_vimplug|status_vimplug|net"
 
 menu_task "base       |Base tools              |install  |30|task_base   |status_base   |net,sudo"
-menu_task "desktop    |Desktop apps            |install  |40|task_desktop|status_desktop|net,sudo"
-menu_task "server     |Server tools (SSH)      |install  |50|task_server |status_server |net,sudo"
-menu_task "tailscale  |Tailscale (VPN)         |install  |55|task_tailscale|status_tailscale|net,sudo"
-menu_task "mdns       |Network discovery (mDNS)|install  |60|task_mdns   |status_mdns   |net,sudo"
+menu_task "desktop    |Desktop apps            |install  |40|task_desktop|status_desktop|net,sudo,optin"
+menu_task "server     |Server tools (SSH)      |install  |50|task_server |status_server |net,sudo,optin"
+menu_task "tailscale  |Tailscale (VPN)         |install  |55|task_tailscale|status_tailscale|net,sudo,optin"
+menu_task "mdns       |Network discovery (mDNS)|install  |60|task_mdns   |status_mdns   |net,sudo,optin"
 
 menu_task "update     |Update from git         |maintain |70|task_update |status_update |net"
 menu_task "doctor     |Doctor (full report)    |maintain |80|task_doctor |-             |"

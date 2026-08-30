@@ -100,6 +100,13 @@ for, so you can add or remove individual rows afterwards. Tailscale is deliberat
 neither — joining a tailnet is a per-machine decision, so it is only installed by ticking
 its row.
 
+The menu opens with the **baseline** this machine is still missing already ticked —
+`Link dotfiles`, `Editor plugins`, `Shell` and `Base tools`. The role-specific tasks
+(`Desktop apps`, `Server tools` and `Tailscale`) are never preselected, however
+missing they are: on a machine of the other kind, "not installed" is the correct
+permanent state rather than a gap to fill. They arrive from a preset, or from
+your own tick.
+
 Tasks always run in the order above regardless of the order you tick them, and everything
 the batch needs — winget, an elevated shell, network — is checked once up front rather
 than failing halfway through. Picking a task whose installer calls `Assert-Admin` in an

@@ -172,15 +172,23 @@ menu_select_all() {
     done
 }
 
-# Anything the machine still needs, in the groups worth defaulting on. Maintain
-# tasks (update, doctor) are never preselected -- they are things you ask for.
+# The baseline this machine is still missing.
+#
+# Two things are deliberately never preselected. Maintain tasks (update, doctor)
+# are things you ask for. And so is anything flagged `optin`: for a role-specific
+# task, "not installed" is not a gap to be filled, it is the correct permanent
+# state on a machine of the other kind. Without that distinction a server -- where
+# desktop apps are absent by design -- opens with Steam and Discord ticked, and
+# the one destructive direction becomes the default.
 menu_select_defaults() {
     local i=0
     menu_clear_selection
     while [ "$i" -lt "$MENU_ROW_COUNT" ]; do
         case "$(menu_group "$i")" in
             configure | install)
-                [ "$(menu_state "$i")" = "todo" ] && menu_select "$(menu_id "$i")"
+                if [ "$(menu_state "$i")" = "todo" ] && ! menu_has_flag "$i" optin; then
+                    menu_select "$(menu_id "$i")"
+                fi
                 ;;
         esac
         i=$((i + 1))
@@ -639,8 +647,12 @@ menu_update_status() {
     local branch behind
     branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" ||
         { printf 'not a git repository'; return 2; }
+    # Exit status alone is not enough: an empty answer here would render as
+    # "<blank> commit(s) behind origin/" rather than saying it cannot tell.
+    [ -n "$branch" ] || { printf 'could not determine the current branch'; return 2; }
     behind="$(git -C "$REPO_ROOT" rev-list --count "HEAD..origin/$branch" 2>/dev/null)" ||
         { printf 'no origin/%s to compare against' "$branch"; return 2; }
+    [ -n "$behind" ] || { printf 'could not compare against origin/%s' "$branch"; return 2; }
     if [ "$behind" = "0" ]; then
         printf 'up to date with origin/%s' "$branch"
         return 0

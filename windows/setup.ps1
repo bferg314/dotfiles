@@ -431,8 +431,12 @@ function Get-TailscaleStatus {
 function Get-UpdateStatus {
     $branch = git -C $REPO_ROOT rev-parse --abbrev-ref HEAD 2>$null
     if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail 'not a git repository' }
+    # Exit status alone is not enough: an empty answer here would render as
+    # "<blank> commit(s) behind origin/" rather than saying it cannot tell.
+    if (-not $branch) { return New-MenuStatus -State unknown -Detail 'could not determine the current branch' }
     $behind = git -C $REPO_ROOT rev-list --count "HEAD..origin/$branch" 2>$null
     if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail "no origin/$branch to compare against" }
+    if (-not $behind) { return New-MenuStatus -State unknown -Detail "could not compare against origin/$branch" }
     if ($behind -eq '0') { return New-MenuStatus -State done -Detail "up to date with origin/$branch" }
     return New-MenuStatus -State todo -Detail "$behind commit(s) behind origin/$branch"
 }
@@ -501,11 +505,11 @@ Add-MenuTask -Id 'vimplug' -Label 'Editor plugins'       -Group configure -Order
 Add-MenuTask -Id 'base'    -Label 'Base tools'           -Group install   -Order 30 `
     -Handler { Invoke-InstallScript -Name 'base' } -Probe { Get-BaseStatus } -Flags @('net', 'winget', 'admin')
 Add-MenuTask -Id 'desktop' -Label 'Desktop apps'         -Group install   -Order 40 `
-    -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget', 'admin')
+    -Handler { Invoke-InstallScript -Name 'desktop' } -Probe { Get-DesktopStatus } -Flags @('net', 'winget', 'admin', 'optin')
 Add-MenuTask -Id 'server'  -Label 'Server tools (SSH)'   -Group install   -Order 50 `
-    -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'winget', 'admin')
+    -Handler { Invoke-InstallScript -Name 'server' } -Probe { Get-ServerStatus } -Flags @('net', 'winget', 'admin', 'optin')
 Add-MenuTask -Id 'tailscale' -Label 'Tailscale (VPN)'     -Group install   -Order 55 `
-    -Handler { Invoke-InstallScript -Name 'tailscale' } -Probe { Get-TailscaleStatus } -Flags @('net', 'winget', 'admin')
+    -Handler { Invoke-InstallScript -Name 'tailscale' } -Probe { Get-TailscaleStatus } -Flags @('net', 'winget', 'admin', 'optin')
 
 Add-MenuTask -Id 'update'  -Label 'Update from git'      -Group maintain  -Order 70 `
     -Handler { Update-Dotfiles } -Probe { Get-UpdateStatus } -Flags @('net')
