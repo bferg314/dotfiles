@@ -19,6 +19,8 @@ Configuration files and scripts for setting up a macOS development environment.
   - Goyo & Limelight for distraction-free writing
   - Git integration (fugitive, gitgutter)
 
+  See [docs/vim-plugins.md](../docs/vim-plugins.md) for what each plugin does and its keyboard shortcuts.
+
 ### Terminal Multiplexer
 - **zellij/config.kdl**: zellij configuration (linked to `~/.config/zellij/config.kdl`)
 

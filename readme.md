@@ -9,7 +9,7 @@ This repository contains my personal dotfiles, organized by operating system. It
 - Shell environments (PowerShell, Bash, Zsh)
 - Python development tools
 - Rust toolchain (rustup)
-- Vim editor
+- Vim editor — see [docs/vim-plugins.md](docs/vim-plugins.md) for the installed plugins and their keyboard shortcuts
 - AutoHotkey scripts (Windows)
 - Various system utilities and aliases
 

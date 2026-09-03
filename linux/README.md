@@ -288,7 +288,8 @@ Symlinked into `~/.bashrc.d/` and sourced by both `~/.bashrc` and `~/.zshrc`.
 
 ### Vim (`vim/.vimrc`)
 Symlinked to `~/.vimrc`. Uses vim-plug; plugins include vim-airline, NERDTree,
-Goyo & Limelight, and git integration (fugitive, gitgutter).
+Goyo & Limelight, and git integration (fugitive, gitgutter). See
+[docs/vim-plugins.md](../docs/vim-plugins.md) for what each plugin does and its keyboard shortcuts.
 
 ### Zellij (`zellij/config.kdl`)
 Symlinked to `~/.config/zellij/config.kdl`. Zellij is the terminal multiplexer —
