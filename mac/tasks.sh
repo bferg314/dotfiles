@@ -68,6 +68,20 @@ status_base() {
     local missing
     missing="$(_missing_commands brew git node rustup zellij gum yazi)"
     [ -d "/Applications/Docker.app" ] || missing="${missing:+$missing, }Docker"
+
+    # install_rustup runs with --no-modify-path -- ~/.cargo/bin only reaches
+    # PATH through zshrc.d/rust.zshrc, which "Link dotfiles" is what actually
+    # links in. `command -v rustup` alone cannot tell "never installed" apart
+    # from "installed, but Link dotfiles hasn't run (or this shell predates
+    # it)", and reporting the latter as plain "missing" sends you chasing a
+    # reinstall instead of the one-line fix.
+    case ",$missing," in
+        *,rustup,*)
+            [ -x "$HOME/.cargo/bin/rustup" ] &&
+                missing="$(printf '%s' "$missing" | sed 's/rustup/rustup (on disk, not on PATH - run Link dotfiles)/')"
+            ;;
+    esac
+
     if [ -n "$missing" ]; then
         printf 'missing: %s' "$missing"
         return 1
