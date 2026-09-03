@@ -290,6 +290,63 @@ function Update-Dotfiles {
     }
 }
 
+# Lists your GitHub repos, skips anything already checked out under ~\code,
+# and lets you pick which of the rest to clone there.
+function Invoke-CloneRepos {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Warn "GitHub CLI (gh) not found - run 'Base tools' first"
+        return
+    }
+    if (-not (Get-Command gum -ErrorAction SilentlyContinue)) {
+        Write-Warn "gum not found - run 'Base tools' first"
+        return
+    }
+    gh auth status *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "gh is not logged in - run 'gh auth login' first"
+        return
+    }
+
+    $codeDir = Join-Path $HOME 'code'
+    New-Item -ItemType Directory -Path $codeDir -Force | Out-Null
+
+    Write-Step "Fetching your GitHub repositories..."
+    $allRepos = gh repo list --limit 1000 --json name --jq '.[].name'
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Could not list repositories"
+        return
+    }
+
+    $uncloned = @($allRepos | Where-Object { $_ -and -not (Test-Path (Join-Path $codeDir $_)) })
+
+    if ($uncloned.Count -eq 0) {
+        Write-Ok "All repositories are already cloned in $codeDir"
+        return
+    }
+
+    # Passed as arguments rather than piped in, so gum is not left taking
+    # options from stdin and keystrokes from the console at once.
+    $selected = & gum choose --no-limit --height 15 --header "space toggles - enter clones - esc cancels" @uncloned
+    if (-not $selected) {
+        Write-Info "Nothing selected."
+        return
+    }
+
+    $failures = 0
+    foreach ($repo in @($selected)) {
+        if (-not $repo) { continue }
+        Write-Step "Cloning $repo..."
+        gh repo clone $repo (Join-Path $codeDir $repo)
+        if ($LASTEXITCODE -ne 0) { $failures++ }
+    }
+
+    if ($failures -eq 0) {
+        Write-Ok "Cloned into $codeDir"
+    } else {
+        Write-Warn "$failures repo(s) failed to clone"
+    }
+}
+
 # ─── Status probes ────────────────────────────────────────────────────────────
 #
 # Each returns a New-MenuStatus for the menu's right-hand column. They must be
@@ -535,6 +592,8 @@ Add-MenuTask -Id 'update'  -Label 'Update from git'      -Group maintain  -Order
     -Handler { Update-Dotfiles } -Probe { Get-UpdateStatus } -Flags @('net')
 Add-MenuTask -Id 'doctor'  -Label 'Doctor (full report)' -Group maintain  -Order 80 `
     -Handler { Show-Doctor }
+Add-MenuTask -Id 'repos'   -Label 'Clone GitHub repos'   -Group maintain  -Order 90 `
+    -Handler { Invoke-CloneRepos } -Flags @('net')
 
 # ─── Go ───────────────────────────────────────────────────────────────────────
 
