@@ -166,6 +166,56 @@ task_tailscale() { _run_install tailscale; }
 task_mdns()    { _run_install avahi; }
 task_update()  { menu_update_repo; }
 
+# Lists your GitHub repos, skips anything already checked out under ~/code,
+# and lets you pick which of the rest to clone there.
+task_clone_repos() {
+    command -v gh >/dev/null 2>&1 || { warn "GitHub CLI (gh) not found - run 'Base tools' first"; return 1; }
+    command -v gum >/dev/null 2>&1 || { warn "gum not found - run 'Base tools' first"; return 1; }
+    gh auth status >/dev/null 2>&1 || { warn "gh is not logged in - run 'gh auth login' first"; return 1; }
+
+    local code_dir="$HOME/code"
+    mkdir -p "$code_dir"
+
+    step "Fetching your GitHub repositories..."
+    local all_repos
+    all_repos="$(gh repo list --limit 1000 --json name --jq '.[].name')" || { warn "Could not list repositories"; return 1; }
+
+    local repo uncloned=()
+    for repo in $all_repos; do
+        [ -d "$code_dir/$repo" ] || uncloned+=("$repo")
+    done
+
+    if [ ${#uncloned[@]} -eq 0 ]; then
+        ok "All repositories are already cloned in $code_dir"
+        return 0
+    fi
+
+    local selected
+    selected="$(printf '%s\n' "${uncloned[@]}" |
+        gum choose --no-limit --height 15 --header "space toggles - enter clones - esc cancels")"
+
+    if [ -z "$selected" ]; then
+        info "Nothing selected."
+        return 0
+    fi
+
+    local failures=0
+    while IFS= read -r repo; do
+        [ -n "$repo" ] || continue
+        step "Cloning $repo..."
+        gh repo clone "$repo" "$code_dir/$repo" || failures=$((failures + 1))
+    done <<EOF
+$selected
+EOF
+
+    if [ "$failures" = "0" ]; then
+        ok "Cloned into $code_dir"
+    else
+        warn "$failures repo(s) failed to clone"
+        return 1
+    fi
+}
+
 task_doctor() {
     printf '%b\n' "${BOLD}Environment${NC}"
     info "distro:   ${DISTRO:-unknown} (${PKG_MANAGER:-unknown})"
@@ -236,3 +286,4 @@ menu_task "mdns       |Network discovery (mDNS)|install  |60|task_mdns   |status
 
 menu_task "update     |Update from git         |maintain |70|task_update |status_update |net"
 menu_task "doctor     |Doctor (full report)    |maintain |80|task_doctor |-             |"
+menu_task "repos      |Clone GitHub repos      |maintain |90|task_clone_repos|-         |net"
