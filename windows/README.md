@@ -31,6 +31,10 @@ This directory contains configuration files and scripts for setting up a Windows
   ripgrep, fzf, zoxide and ImageMagick. Each installs independently via `Install-Package`,
   so one failing package does not block the rest. Launch with `yazi`. `resvg` (SVG preview)
   has no winget package yet; install it with Scoop if you want it.
+- Windows ships no `file` command, which yazi needs for MIME-based preview detection.
+  `Base tools` points yazi at the copy Git for Windows already bundles
+  (`<GitRoot>\usr\bin\file.exe`) by setting the `YAZI_FILE_ONE` user environment variable —
+  reopen your terminal afterwards for it to take effect. Confirm it took with `yazi --debug`.
 
 ### Zellij (`zellij/`)
 - **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the

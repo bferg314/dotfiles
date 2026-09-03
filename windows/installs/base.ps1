@@ -149,6 +149,28 @@ Install-Package -Id 'ajeetdsouza.zoxide'       -Name 'zoxide'      | Out-Null
 Install-Package -Id 'ImageMagick.ImageMagick'  -Name 'ImageMagick' | Out-Null
 Write-Host ""
 
+# Windows ships no `file` command, which yazi shells out to for MIME
+# detection -- without it, previews fall back to guessing by extension. Git
+# for Windows (installed above as Git.Git) bundles one at usr\bin\file.exe;
+# YAZI_FILE_ONE is the environment variable yazi's own docs say to point at
+# it. git.exe resolves to <GitRoot>\cmd or <GitRoot>\bin depending on how it
+# was found, so file.exe is one level further up either way.
+$gitCmd = Get-Command git -ErrorAction SilentlyContinue
+if ($gitCmd) {
+    $gitRoot = Split-Path (Split-Path $gitCmd.Source -Parent) -Parent
+    $fileExe = Join-Path $gitRoot 'usr\bin\file.exe'
+    if (Test-Path -LiteralPath $fileExe) {
+        [Environment]::SetEnvironmentVariable('YAZI_FILE_ONE', $fileExe, 'User')
+        $env:YAZI_FILE_ONE = $fileExe
+        Write-Ok "YAZI_FILE_ONE set to $fileExe"
+    } else {
+        Write-Warn "No usr\bin\file.exe under $gitRoot; yazi's MIME-based previews may be limited"
+    }
+} else {
+    Write-Warn "git not found on PATH; could not set YAZI_FILE_ONE for yazi's MIME detection"
+}
+Write-Host ""
+
 Write-Header "Base Tools Installation Complete"
 
 $ok = Show-PackageFailures
@@ -157,6 +179,7 @@ Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
 Write-Info "cargo and rustc land on PATH in a new shell: rustup show"
 Write-Info "Set your terminal font to 'FiraCode Nerd Font Mono' so prompt glyphs render."
+Write-Info "Close and reopen your terminal for YAZI_FILE_ONE to take effect in yazi's previews."
 Write-Host ""
 
 if (-not $ok) { exit 1 }
