@@ -256,18 +256,27 @@ install_rustup() {
 # warning rather than fatal.
 #
 # Installed per-user into ~/.local/bin from the upstream release, the same way
-# zellij and the Nerd Font are, so every platform ends up on one source. Arch
-# packages it, so take the package there.
+# zellij and the Nerd Font are, so every platform ends up on one source.
+#
+# Pinned rather than "latest", and Arch's own package (which carries the same
+# release) is bypassed too: gum 2.0.0's migration to Bubble Tea v2 broke the
+# Space key as a toggle in `gum choose --no-limit` -- confirmed by piping keys
+# to it over a pty, `x` and `tab` still toggle a row, Space silently does
+# nothing. 0.17.0 is the last release before that migration and does not have
+# the bug. winget's charmbracelet.gum manifest has not picked up 2.0.0 yet,
+# which is why this has only shown up on Linux and macOS so far. Revert
+# GUM_PIN_TAG to `github_latest_tag charmbracelet/gum` once upstream fixes it.
 ensure_gum() {
     step "Installing gum..."
 
-    if command -v gum >/dev/null 2>&1; then
-        ok "gum already installed ($(gum --version 2>/dev/null))"
-        return 0
-    fi
+    local GUM_PIN_TAG="v0.17.0"
 
-    if [ "$PKG_MANAGER" = "pacman" ]; then
-        pkg_install gum && { ok "gum installed"; return 0; }
+    if command -v gum >/dev/null 2>&1; then
+        if [ "$(gum --version 2>/dev/null | awk '{print $3}')" = "$GUM_PIN_TAG" ]; then
+            ok "gum already installed ($GUM_PIN_TAG)"
+            return 0
+        fi
+        info "Replacing gum with the pinned $GUM_PIN_TAG (see the comment above ensure_gum)"
     fi
 
     local arch
@@ -276,8 +285,7 @@ ensure_gum() {
     [ "$arch" = "aarch64" ] && arch="arm64"
 
     local tag version
-    tag="$(github_latest_tag charmbracelet/gum)"
-    [ -n "$tag" ] || { warn "Could not determine the latest gum release (GitHub API rate limit?)"; return 1; }
+    tag="$GUM_PIN_TAG"
     version="${tag#v}"
 
     local tmp

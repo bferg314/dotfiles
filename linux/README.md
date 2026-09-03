@@ -238,6 +238,12 @@ The setup menu's checklist picker. Fetched from the upstream GitHub release the 
 the Nerd Font are, and installed to `/usr/local/bin`. It is optional — the menu falls back to a
 numbered list — so a failure here warns rather than aborting the base install.
 
+Pinned to `v0.17.0` rather than the latest release (and Arch's own package, which carries the same
+release, is bypassed too): gum `2.0.0`'s migration to Bubble Tea v2 broke the Space key as a toggle
+in `gum choose --no-limit` — `x` and `tab` still work, Space silently does nothing. `0.17.0` is the
+last release before that migration. Revert `GUM_PIN_TAG` in `ensure_gum` (`installs/common.sh`)
+once upstream fixes it.
+
 ### `installs/tailscale.sh` — Tailscale
 
 | Source | Arch | Fedora | RHEL/Alma/Rocky | Debian/Ubuntu |
