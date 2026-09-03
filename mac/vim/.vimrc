@@ -45,7 +45,7 @@ map <F2> :mksession! ~/vim_session <cr> " Quick write session with F2
 map <F3> :source ~/vim_session <cr>     " And load session with F3
 
 " Paste toggle
-set pastetoggle=<F3>
+set pastetoggle=<F4>
 
 " Use system clipboard (unnamed for macOS)
 set clipboard=unnamed

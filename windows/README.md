@@ -18,6 +18,9 @@ This directory contains configuration files and scripts for setting up a Windows
   - NERDTree for file navigation
   - Git integration (fugitive, gitgutter)
   - Code formatting and syntax checking
+  - Goyo & Limelight for distraction-free writing
+
+  See [docs/vim-plugins.md](../docs/vim-plugins.md) for what each plugin does and its keyboard shortcuts.
 
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
