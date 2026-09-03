@@ -60,10 +60,8 @@ echo -e "${GREEN}✓ zellij installed${NC}"
 echo
 
 # 3a. Install gum, which draws the setup menu's checklist.
-# The menu falls back to a numbered list without it, so brew_install's warning
-# on failure is enough -- no need to stop the whole base install.
-echo -e "${YELLOW}Installing gum...${NC}"
-brew_install gum
+# set -e is active, and the menu works without it, so a failure only warns.
+ensure_gum || warn "Continuing without gum; the setup menu will use its numbered fallback."
 echo
 
 # 3b. Install the terminal font

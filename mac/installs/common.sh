@@ -134,3 +134,75 @@ github_latest_tag() {
     curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
         grep '"tag_name"' | head -n1 | cut -d'"' -f4
 }
+
+# ─── gum ──────────────────────────────────────────────────────────────────────
+
+# gum draws the multi-select checklist in the setup menu. It is optional: the
+# menu falls back to a numbered list when it is missing, so a failure here is a
+# warning rather than fatal.
+#
+# Installed from the upstream GitHub release rather than the Homebrew formula,
+# and pinned rather than latest: gum 2.0.0's migration to Bubble Tea v2 broke
+# the Space key as a toggle in `gum choose --no-limit` -- confirmed on Linux by
+# piping keys to it over a pty, `x` and `tab` still toggle a row, Space
+# silently does nothing. The Homebrew formula carries the same broken release.
+# 0.17.0 is the last release before that migration and does not have the bug.
+# winget's charmbracelet.gum manifest has not picked up 2.0.0 yet, which is
+# why this has only shown up on Linux and macOS so far. Revert GUM_PIN_TAG to
+# `github_latest_tag charmbracelet/gum` and brew_install back to `brew_install
+# gum` once upstream fixes it.
+ensure_gum() {
+    step "Installing gum..."
+
+    local GUM_PIN_TAG="v0.17.0"
+
+    if command -v gum >/dev/null 2>&1; then
+        if [ "$(gum --version 2>/dev/null | awk '{print $3}')" = "$GUM_PIN_TAG" ]; then
+            ok "gum already installed ($GUM_PIN_TAG)"
+            return 0
+        fi
+        info "Replacing gum with the pinned $GUM_PIN_TAG (see the comment above ensure_gum)"
+    fi
+
+    # A previously brew-installed gum sits in /opt/homebrew/bin or
+    # /usr/local/bin/gum -- ahead of, or the same as, where the pinned binary
+    # below goes -- and would otherwise keep shadowing it on PATH.
+    if brew_on_path && brew list --formula gum >/dev/null 2>&1; then
+        brew uninstall gum >/dev/null 2>&1 || warn "Could not uninstall the Homebrew gum; it may still shadow the pinned binary"
+    fi
+
+    local arch
+    arch="$(detect_arch)" || { warn "Unsupported architecture for the gum release: $(uname -m)"; return 1; }
+    # The release assets say arm64 where uname says aarch64.
+    [ "$arch" = "aarch64" ] && arch="arm64"
+
+    local tag="$GUM_PIN_TAG" version="${GUM_PIN_TAG#v}"
+
+    local tmp
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' RETURN
+
+    if ! curl -fsSL "https://github.com/charmbracelet/gum/releases/download/${tag}/gum_${version}_Darwin_${arch}.tar.gz" |
+            tar -xz -C "$tmp"; then
+        warn "Failed to download or extract gum ${tag}"
+        return 1
+    fi
+
+    local binary
+    binary="$(find "$tmp" -type f -name gum -perm -u+x 2>/dev/null | head -n1)"
+    [ -n "$binary" ] || { warn "No gum binary in the ${tag} archive"; return 1; }
+
+    if sudo install -m 755 "$binary" /usr/local/bin/gum 2>/dev/null; then
+        ok "gum installed ($tag) to /usr/local/bin"
+        return 0
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    install -m 755 "$binary" "$HOME/.local/bin/gum" || { warn "Could not install gum"; return 1; }
+    ok "gum installed ($tag) to ~/.local/bin"
+
+    case ":$PATH:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) warn "$HOME/.local/bin is not on PATH, so the menu will not find gum until it is" ;;
+    esac
+}
