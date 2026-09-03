@@ -166,7 +166,10 @@ Additional actions:
   management. It runs with `--no-modify-path`, so rustup does not append its own block to `~/.bashrc`,
   `~/.profile` and `~/.zshenv` — `bashrc.d/rust.bashrc` puts `~/.cargo/bin` on PATH instead. Installed
   after the development tools, since the default toolchain links with `cc`. A rustup failure warns
-  rather than aborting the base install.
+  rather than aborting the base install. **This means rustup only reaches PATH once `Link dotfiles`
+  has run and you've opened a new shell** — running `Base tools` on its own installs it to
+  `~/.cargo/bin` but leaves it invisible until then. The `Base tools` status line calls this out
+  explicitly (`rustup (on disk, not on PATH - run Link dotfiles)`) rather than just saying "missing".
 - Prompts for git `user.name` / `user.email` if not already set globally.
 - The GitHub CLI comes from GitHub's own repo on dnf/apt rather than the distro
   repos, which lag. It is installed but not authenticated — run `gh auth login`
