@@ -147,6 +147,8 @@ Once the links are in place, `dotsetup` reopens the menu from anywhere on all th
 - One terminal font everywhere — FiraCode Nerd Font Mono at 16, installed from the
   same [nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release on all three platforms
 - One setup menu on all three platforms — the same checklist, tasks and run order
+- [yazi](https://yazi-rs.github.io/) TUI file manager on all three platforms, with image,
+  video, PDF and archive previews and `fd`/`ripgrep`/`fzf`/`zoxide` jump integrations
 - Version control integration
 - Productivity shortcuts and utilities
 

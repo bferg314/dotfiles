@@ -128,6 +128,27 @@ Install-Package -Id '7zip.7zip'            -Name '7-Zip' | Out-Null
 Install-Package -Id 'JernejSimoncic.Wget'  -Name 'wget'  | Out-Null
 Write-Host ""
 
+# ─── yazi (TUI file manager) ──────────────────────────────────────────────────
+#
+# Install-Package is per-package and best-effort (failures land in
+# $global:DotfilesFailedPackages and are reported at the end rather than
+# aborting), so yazi itself installing is unaffected by any one extra
+# package failing. 7-Zip is already installed above. resvg (SVG preview) has
+# no winget package yet, per yazi's own install docs.
+
+Install-Package -Id 'sxyazi.yazi' -Name 'yazi' | Out-Null
+Write-Host ""
+
+Install-Package -Id 'Gyan.FFmpeg'              -Name 'ffmpeg'      | Out-Null
+Install-Package -Id 'jqlang.jq'                -Name 'jq'          | Out-Null
+Install-Package -Id 'oschwartz10612.Poppler'   -Name 'poppler'     | Out-Null
+Install-Package -Id 'sharkdp.fd'               -Name 'fd'          | Out-Null
+Install-Package -Id 'BurntSushi.ripgrep.MSVC'  -Name 'ripgrep'     | Out-Null
+Install-Package -Id 'junegunn.fzf'             -Name 'fzf'         | Out-Null
+Install-Package -Id 'ajeetdsouza.zoxide'       -Name 'zoxide'      | Out-Null
+Install-Package -Id 'ImageMagick.ImageMagick'  -Name 'ImageMagick' | Out-Null
+Write-Host ""
+
 Write-Header "Base Tools Installation Complete"
 
 $ok = Show-PackageFailures

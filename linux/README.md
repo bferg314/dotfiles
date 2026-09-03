@@ -148,6 +148,8 @@ ed25519 SSH key, and appends a pasted public key to `~/.ssh/authorized_keys`.
 | Rust | `rustup` from `sh.rustup.rs` → `~/.cargo` | same | same | same |
 | Git | `git` | `git` | `git` | `git` |
 | GitHub CLI | `github-cli` | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's `gh-cli` repo) | `gh` (GitHub's apt repo) |
+| yazi (TUI file manager) | `yazi` | `yazi` (`lihaohong/yazi` COPR) | same COPR | `yazi` (yazi's own apt repo) |
+| yazi extras | `ffmpeg`, `7zip`, `jq`, `poppler`, `fd`, `ripgrep`, `fzf`, `zoxide`, `resvg`, `imagemagick` | best-effort subset of the same, whatever `pkg_available` finds | same | same |
 
 Additional actions:
 - **Docker repo setup** — Fedora/RHEL: adds `docker-ce.repo` via `dnf config-manager`, handling both dnf4 (`--add-repo`) and dnf5 (`addrepo --from-repofile=`) syntax. Debian/Ubuntu: installs `apt-transport-https ca-certificates curl gnupg lsb-release`, removes stale `docker.list`/`docker.sources` and old keyrings, then adds Docker's key to `/etc/apt/keyrings/docker.gpg` and the repo for the correct `ubuntu`/`debian` path.
@@ -169,6 +171,15 @@ Additional actions:
 - The GitHub CLI comes from GitHub's own repo on dnf/apt rather than the distro
   repos, which lag. It is installed but not authenticated — run `gh auth login`
   yourself.
+- **yazi** comes from Arch's official repo, the `lihaohong/yazi` Fedora/EL9+ COPR, or
+  yazi's own apt repo — none of the four carry a current release in their own repos yet.
+  Launch it with `yazi`; image, video, PDF and archive previews work out of the box in a
+  terminal with graphics-protocol support (kitty, wezterm, foot, ...). The preview/jump
+  extras (`ffmpeg`, `7zip`/`p7zip`, `jq`, `poppler`, `fd`, `ripgrep`, `fzf`, `zoxide`,
+  `imagemagick`, and on Arch `resvg`) install best-effort, per package, via
+  `pkg_available` — whichever ones this distro's repos do not carry are skipped with a
+  warning rather than failing the rest of the base install. Debian/Ubuntu's `fd-find`
+  installs its binary as `fdfind`; a symlink to `fd` is added automatically.
 
 ---
 

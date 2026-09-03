@@ -431,7 +431,7 @@ function Get-PowerShell7Status {
 }
 
 function Get-BaseStatus {
-    $missing = Get-MissingCommands @('git', 'gh', 'node', 'rustup', 'zellij', 'starship', 'gum')
+    $missing = Get-MissingCommands @('git', 'gh', 'node', 'rustup', 'zellij', 'starship', 'gum', 'yazi')
     if ($missing.Count -gt 0) {
         return New-MenuStatus -State todo -Detail "missing: $($missing -join ', ')"
     }
