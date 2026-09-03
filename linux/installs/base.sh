@@ -242,6 +242,89 @@ fi
 ok "GitHub CLI installed ($(gh --version 2>/dev/null | head -n1))"
 echo
 
+# 9. Install yazi (TUI file manager)
+#
+# Arch packages it directly. Fedora and the RHEL family get it from the
+# lihaohong/yazi COPR, which also targets EL9+ chroots. Debian and Ubuntu get
+# it from yazi's own apt repo, the same shape as the GitHub CLI repo above --
+# none of the four carry a current yazi in their own repos yet.
+step "Installing yazi..."
+if command -v yazi >/dev/null 2>&1; then
+    info "yazi already installed"
+elif [ "$PKG_MANAGER" = "pacman" ]; then
+    pkg_install yazi
+elif [ "$PKG_MANAGER" = "dnf" ]; then
+    sudo dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
+    sudo dnf -y copr enable lihaohong/yazi
+    pkg_install yazi
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    sudo install -m 0755 -d /usr/share/keyrings
+    curl -fsSL https://yazi-rs.github.io/builds/yazi-keyring.gpg |
+        sudo tee /usr/share/keyrings/yazi-keyring.gpg > /dev/null
+    echo "deb [signed-by=/usr/share/keyrings/yazi-keyring.gpg] https://yazi-rs.github.io/builds/ stable main" |
+        sudo tee /etc/apt/sources.list.d/yazi.list > /dev/null
+    pkg_update
+    pkg_install yazi
+fi
+ok "yazi installed ($(yazi --version 2>/dev/null || echo 'version unknown'))"
+
+# 9b. Install yazi's preview and navigation extras.
+#
+# Best-effort and per-package: yazi itself is fully usable without any of
+# these, they just turn on richer previews (video, archives, PDF, images) and
+# the fd/rg/fzf/zoxide jump integrations. Package availability varies a lot
+# across the four families, so each is checked with pkg_available first
+# rather than batching them into one command that a single missing name would
+# fail entirely (pacman is the exception: yazi's own docs give this exact
+# line as tested against Arch's official repos).
+step "Installing yazi preview/navigation extras..."
+case "$PKG_MANAGER" in
+    pacman)
+        pkg_install ffmpeg 7zip jq poppler fd ripgrep fzf zoxide resvg imagemagick
+        ;;
+    dnf | apt)
+        YAZI_EXTRAS=""
+        _want() { pkg_available "$1" && YAZI_EXTRAS="$YAZI_EXTRAS $1"; }
+        # Every call is `|| true`: pkg_available returning false for an
+        # optional extra must not trip `set -e` and abort the whole install.
+        if [ "$PKG_MANAGER" = "dnf" ]; then
+            { _want 7zip || _want p7zip; } || true
+            _want jq || true
+            _want poppler-utils || true
+            _want fd-find || true
+            _want ripgrep || true
+            _want fzf || true
+            _want zoxide || true
+            { _want ffmpeg || _want ffmpeg-free; } || true
+            _want ImageMagick || true
+        else
+            { _want 7zip || _want p7zip-full; } || true
+            _want jq || true
+            _want poppler-utils || true
+            _want fd-find || true
+            _want ripgrep || true
+            _want fzf || true
+            _want zoxide || true
+            _want ffmpeg || true
+            _want imagemagick || true
+        fi
+        if [ -n "$YAZI_EXTRAS" ]; then
+            # shellcheck disable=SC2086
+            pkg_install $YAZI_EXTRAS || warn "Some yazi extras failed to install; yazi itself is unaffected"
+        else
+            warn "None of yazi's preview extras are in this distro's repos"
+        fi
+        # Debian/Ubuntu's fd-find installs the binary as `fdfind` to avoid a
+        # name clash with an unrelated package; symlink it to `fd` so yazi
+        # (and everything else expecting `fd`) can find it.
+        if [ "$PKG_MANAGER" = "apt" ] && command -v fdfind >/dev/null 2>&1 && ! command -v fd >/dev/null 2>&1; then
+            sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+        fi
+        ;;
+esac
+ok "yazi extras installed"
+echo
+
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
 echo
 echo -e "${YELLOW}IMPORTANT: If this is your first time installing Docker, you need to"

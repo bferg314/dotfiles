@@ -212,6 +212,17 @@ brew install gh
 echo -e "${GREEN}✓ GitHub CLI installed${NC}"
 echo
 
+# 9. Install yazi (TUI file manager) with its preview and navigation extras.
+# brew_install is per-formula and best-effort (see common.sh), so yazi itself
+# installing is unaffected by any one extra formula failing.
+echo -e "${YELLOW}Installing yazi...${NC}"
+brew_install yazi
+echo
+
+echo -e "${YELLOW}Installing yazi preview/navigation extras...${NC}"
+brew_install ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide resvg imagemagick
+echo
+
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
 echo
 echo -e "${YELLOW}IMPORTANT: If Docker Desktop was just installed, open it from Applications"

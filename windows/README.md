@@ -25,6 +25,13 @@ This directory contains configuration files and scripts for setting up a Windows
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
 
+### TUI File Manager
+- **yazi**: installed by `Base tools` via winget (`sxyazi.yazi`), along with its
+  preview/navigation extras — ffmpeg, 7-Zip (already installed above), jq, poppler, fd,
+  ripgrep, fzf, zoxide and ImageMagick. Each installs independently via `Install-Package`,
+  so one failing package does not block the rest. Launch with `yazi`. `resvg` (SVG preview)
+  has no winget package yet; install it with Scoop if you want it.
+
 ### Zellij (`zellij/`)
 - **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the
   Linux and macOS copies. It is a separate file only because `default_shell` has to differ

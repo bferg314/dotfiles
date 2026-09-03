@@ -24,6 +24,12 @@ Configuration files and scripts for setting up a macOS development environment.
 ### Terminal Multiplexer
 - **zellij/config.kdl**: zellij configuration (linked to `~/.config/zellij/config.kdl`)
 
+### TUI File Manager
+- **yazi**: installed by `Base tools`, along with its preview/navigation extras (`ffmpeg`,
+  `sevenzip`, `jq`, `poppler`, `fd`, `ripgrep`, `fzf`, `zoxide`, `resvg`, `imagemagick`) via
+  `brew_install`, which installs each formula independently so one failure does not block
+  the rest. Launch with `yazi`; image, video, PDF and archive previews work out of the box.
+
 ## Installation
 
 1. Clone the repository:
