@@ -121,6 +121,16 @@ Write-Host ""
 Install-Package -Id 'Rustlang.Rustup' -Name 'rustup' | Out-Null
 Write-Host ""
 
+# ─── Go ───────────────────────────────────────────────────────────────────────
+#
+# The upstream MSI rather than a Chocolatey/scoop package, the counterpart to
+# rustup above and install_go in linux/installs/common.sh: one source keeps
+# Windows, Linux and macOS on the same version. The MSI adds
+# C:\Program Files\Go\bin to the system PATH itself, so no shell config here.
+
+Install-Package -Id 'GoLang.Go' -Name 'Go' | Out-Null
+Write-Host ""
+
 # ─── Additional utilities ─────────────────────────────────────────────────────
 # curl is omitted: curl.exe ships with Windows 10 1803+.
 
@@ -178,6 +188,7 @@ $ok = Show-PackageFailures
 Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build Tools in particular."
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
 Write-Info "cargo and rustc land on PATH in a new shell: rustup show"
+Write-Info "go lands on PATH in a new shell: go version"
 Write-Info "Set your terminal font to 'FiraCode Nerd Font Mono' so prompt glyphs render."
 Write-Info "Close and reopen your terminal for YAZI_FILE_ONE to take effect in yazi's previews."
 Write-Host ""

@@ -249,6 +249,52 @@ install_rustup() {
     ok "rustup installed ($(rustup --version 2>/dev/null | head -n1))"
 }
 
+# ─── Go ───────────────────────────────────────────────────────────────────────
+
+# Install Go from the upstream tarball to /usr/local/go, the same reasoning as
+# install_rustup above: Debian and the RHEL family both lag upstream Go by a
+# release or more, and one source means Linux, macOS and Windows all end up on
+# the same version.
+#
+# bashrc.d/go.bashrc puts /usr/local/go/bin and $HOME/go/bin (GOPATH's default
+# bin dir) on PATH, so this does not touch shell config.
+install_go() {
+    local arch
+    arch="$(detect_arch)" || { warn "Unsupported architecture for the Go release: $(uname -m)"; return 1; }
+    [ "$arch" = "x86_64" ] && arch="amd64"
+    [ "$arch" = "aarch64" ] && arch="arm64"
+
+    local version
+    version="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)"
+    [ -n "$version" ] || { warn "Could not determine the latest Go release"; return 1; }
+
+    if [ -x /usr/local/go/bin/go ]; then
+        local installed
+        installed="$(/usr/local/go/bin/go version | awk '{print $3}')"
+        if [ "$installed" = "$version" ]; then
+            ok "Go already installed ($version)"
+            return 0
+        fi
+        info "Replacing Go $installed with $version"
+    fi
+
+    local tmp
+    tmp="$(mktemp -d)"
+    # Local trap: the caller's make_tmpdir trap must survive this function.
+    trap 'rm -rf "$tmp"' RETURN
+
+    if ! curl -fsSL "https://go.dev/dl/${version}.linux-${arch}.tar.gz" | tar -xz -C "$tmp"; then
+        warn "Failed to download or extract ${version}"
+        return 1
+    fi
+
+    sudo rm -rf /usr/local/go
+    sudo mv "$tmp/go" /usr/local/go
+
+    [ -x /usr/local/go/bin/go ] || { warn "go is not present at /usr/local/go/bin after install"; return 1; }
+    ok "Go installed ($(/usr/local/go/bin/go version | awk '{print $3}'))"
+}
+
 # ─── gum ──────────────────────────────────────────────────────────────────────
 
 # gum draws the multi-select checklist in the setup menu. It is optional: the
