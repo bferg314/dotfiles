@@ -182,6 +182,33 @@ else
 fi
 echo
 
+# 6c. Install the Go toolchain
+#
+# Upstream tarball rather than Homebrew's go formula, the same reasoning as
+# rustup above: one source keeps macOS, Linux and Windows on the same version.
+# Installed to /usr/local/go, the layout upstream's own tarball assumes;
+# zshrc.d/go.zshrc puts /usr/local/go/bin and $HOME/go/bin on PATH.
+echo -e "${YELLOW}Installing Go...${NC}"
+GO_ARCH="$(uname -m)"
+[ "$GO_ARCH" = "x86_64" ] && GO_ARCH="amd64"
+GO_VERSION="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)"
+if [ -z "$GO_VERSION" ]; then
+    echo -e "${YELLOW}⚠ Could not determine the latest Go release; skipping Go${NC}"
+elif [ -x /usr/local/go/bin/go ] && [ "$(/usr/local/go/bin/go version | awk '{print $3}')" = "$GO_VERSION" ]; then
+    echo -e "${GREEN}✓ Go already installed ($GO_VERSION)${NC}"
+else
+    GO_TMP="$(mktemp -d)"
+    if curl -fsSL "https://go.dev/dl/${GO_VERSION}.darwin-${GO_ARCH}.tar.gz" | tar -xz -C "$GO_TMP"; then
+        sudo rm -rf /usr/local/go
+        sudo mv "$GO_TMP/go" /usr/local/go
+        echo -e "${GREEN}✓ Go installed ($(/usr/local/go/bin/go version | awk '{print $3}'))${NC}"
+    else
+        echo -e "${YELLOW}⚠ Failed to download or extract Go; continuing without it${NC}"
+    fi
+    rm -rf "$GO_TMP"
+fi
+echo
+
 # 7. Install and configure Git
 echo -e "${YELLOW}Installing git...${NC}"
 brew install git
@@ -228,3 +255,4 @@ echo -e "to complete the setup and grant necessary permissions.${NC}"
 echo
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
 echo -e "${BLUE}cargo and rustc land on PATH in a new shell (zshrc.d/rust.zshrc): ${BOLD}rustup show${NC}"
+echo -e "${BLUE}go lands on PATH in a new shell (zshrc.d/go.zshrc): ${BOLD}go version${NC}"

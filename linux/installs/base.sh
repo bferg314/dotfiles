@@ -194,6 +194,12 @@ step "Installing rustup..."
 install_rustup || warn "Continuing without Rust; re-run this script or see https://rustup.rs"
 echo
 
+# 6c. Install the Go toolchain
+# set -e is active, and a failed Go install should not abort the whole base install.
+step "Installing Go..."
+install_go || warn "Continuing without Go; re-run this script or see https://go.dev/dl"
+echo
+
 # 7. Install and configure Git
 step "Installing git..."
 pkg_install git
@@ -332,3 +338,4 @@ echo -e "log out and log back in for the docker group changes to take effect.${N
 echo
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
 echo -e "${BLUE}cargo and rustc land on PATH in a new shell (bashrc.d/rust.bashrc): ${BOLD}rustup show${NC}"
+echo -e "${BLUE}go lands on PATH in a new shell (bashrc.d/go.bashrc): ${BOLD}go version${NC}"
