@@ -1,4 +1,4 @@
-﻿
+
 
 
 # Starship
@@ -8,8 +8,21 @@
 # Guarded so a machine that has not run the base install yet gets a plain
 # prompt instead of a "term 'starship' is not recognized" error on every
 # single shell start.
-if (Get-Command starship -ErrorAction SilentlyContinue) {
-    Invoke-Expression (&starship init powershell)
+#
+# `starship init powershell` only emits a stub that shells out to
+# `--print-full-init`, so the plain form costs two starship spawns on every
+# shell start. Generate the full init once and cache it, re-generating only
+# when the starship binary is newer than the cache.
+$starship = Get-Command starship -ErrorAction SilentlyContinue
+if ($starship) {
+    $initCache = Join-Path $env:LOCALAPPDATA 'starship\init.ps1'
+    $cached = Get-Item -LiteralPath $initCache -ErrorAction SilentlyContinue
+    $binary = Get-Item -LiteralPath $starship.Source -ErrorAction SilentlyContinue
+    if (-not $cached -or ($binary -and $cached.LastWriteTime -lt $binary.LastWriteTime)) {
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path $initCache)
+        & $starship.Source init powershell --print-full-init | Set-Content -LiteralPath $initCache -Encoding utf8
+    }
+    . $initCache
 }
 
 # oh-my-posh
