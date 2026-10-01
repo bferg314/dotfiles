@@ -1,6 +1,3 @@
-# Python version aliases
-Set-Alias -Name py -Value python
-
 # Virtual environment functions
 function New-VirtualEnv { python -m venv .venv }
 Set-Alias -Name cvenv -Value New-VirtualEnv
@@ -36,8 +33,12 @@ Set-Alias -Name pipi -Value Install-Requirements
 
 # IPython/Jupyter aliases
 Set-Alias -Name ipy -Value ipython
-Set-Alias -Name jn -Value "jupyter notebook"
-Set-Alias -Name jl -Value "jupyter lab"
+
+function Start-JupyterNotebook { jupyter notebook $args }
+Set-Alias -Name jn -Value Start-JupyterNotebook
+
+function Start-JupyterLab { jupyter lab $args }
+Set-Alias -Name jl -Value Start-JupyterLab
 
 # Code quality and formatting
 Set-Alias -Name lint -Value pylint
