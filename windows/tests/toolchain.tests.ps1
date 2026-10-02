@@ -187,17 +187,20 @@ Test-Case 'Add-GitInclude adds once and Test-GitInclude sees it (isolated ~/.git
 
 # ─── setup.ps1: shared links and the generated zellij config ──────────────────
 
-# Lift the functions and the $ZELLIJ_MARKER / $NVIM_CONFIG_DIR assignments
-# out of setup.ps1 without running it.
+# Lift the functions and the marker assignments out of setup.ps1 without
+# running it.
 $setupAst = [System.Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $REPO_ROOT 'windows\setup.ps1'), [ref]$null, [ref]$null)
-$wanted = @('Get-SharedLinks', 'Get-ZellijConfigContent', 'Write-ZellijConfig', 'Test-ZellijConfigCurrent', 'Test-DotfileLinked')
+$wanted = @('Get-SharedLinks', 'Test-DotfileLinked',
+            'Write-GeneratedFile', 'Test-GeneratedFileCurrent',
+            'Get-ZellijConfigContent', 'Write-ZellijConfig', 'Test-ZellijConfigCurrent',
+            'Get-GitIgnoreContent', 'Write-GitIgnore', 'Test-GitIgnoreCurrent')
 foreach ($fn in $setupAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
     if ($wanted -contains $fn.Name) { . ([scriptblock]::Create($fn.Extent.Text)) }
 }
 foreach ($assign in $setupAst.FindAll({ param($n)
             $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-            "$($n.Left)" -eq '$ZELLIJ_MARKER' }, $false)) {
+            "$($n.Left)" -in @('$ZELLIJ_MARKER', '$GIT_IGNORE_MARKER') }, $false)) {
     . ([scriptblock]::Create($assign.Extent.Text))
 }
 
@@ -237,6 +240,59 @@ Test-Case 'a stale generated zellij config is rewritten in place, with no backup
     Write-ZellijConfig
     Assert-True (Test-ZellijConfigCurrent) 'not rewritten'
     Assert-Equal 0 @(Get-ChildItem -LiteralPath (Split-Path $ZELLIJ_CONFIG) -Filter '*.bak-*').Count 'backups:'
+}
+
+# ─── setup.ps1: the git ignore file is copied, never linked ───────────────────
+#
+# Git for Windows treats a dangling global-ignore symlink as fatal for every
+# command in every repo. The link dangled as soon as this checkout moved to a
+# commit without shared/git/ignore, which locked git up on a real machine.
+
+Test-Case 'the git ignore file is not among the shared links' {
+    $targets = @(Get-SharedLinks | ForEach-Object { Split-Path $_.Target -Leaf })
+    Assert-True ($targets -notcontains 'ignore') 'shared/git/ignore is linked; it must be copied'
+}
+
+Test-Case 'the git ignore file is written as a real file with the shared patterns' {
+    $script:GIT_IGNORE = Join-Path $TMP 'git\ignore'
+    Write-GitIgnore
+    $item = Get-Item -LiteralPath $GIT_IGNORE -Force
+    Assert-True (-not $item.LinkType) "written as a $($item.LinkType)"
+    $text = [System.IO.File]::ReadAllText($GIT_IGNORE)
+    Assert-True ($text.StartsWith($GIT_IGNORE_MARKER)) 'marker missing'
+    Assert-True ($text -match '(?m)^\.DS_Store$') 'shared patterns missing'
+    $bytes = [System.IO.File]::ReadAllBytes($GIT_IGNORE)
+    Assert-True (-not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB)) 'written with a BOM'
+    Assert-True (Test-GitIgnoreCurrent) 'not reported current right after writing'
+    # And git can read it as an exclude file.
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        git -c "core.excludesFile=$GIT_IGNORE" -C $REPO_ROOT status --short *> $null
+        Assert-Equal 0 $LASTEXITCODE 'git rejects the copy as an exclude file:'
+    }
+}
+
+Test-Case 'a git ignore file you wrote yourself is backed up, not overwritten' {
+    $script:GIT_IGNORE = Join-Path $TMP 'git-own\ignore'
+    New-Item -ItemType Directory -Force -Path (Split-Path $GIT_IGNORE) | Out-Null
+    Set-Content -LiteralPath $GIT_IGNORE -Value '*.mine'
+    Write-GitIgnore
+    $backups = @(Get-ChildItem -LiteralPath (Split-Path $GIT_IGNORE) -Filter 'ignore.bak-*')
+    Assert-Equal 1 $backups.Count 'backups:'
+    Assert-True ((Get-Content -LiteralPath $backups[0].FullName -Raw) -match 'mine') 'backup lost the content'
+}
+
+Test-Case 'a git ignore symlink left by an older setup is replaced by a copy' {
+    if (-not (Test-CanSymlink)) {
+        Write-Host '        (needs Developer Mode or an elevated shell to create a symlink; skipped)'
+        return
+    }
+    $script:GIT_IGNORE = Join-Path $TMP 'git-link\ignore'
+    New-Item -ItemType Directory -Force -Path (Split-Path $GIT_IGNORE) | Out-Null
+    New-Item -ItemType SymbolicLink -Path $GIT_IGNORE -Target (Join-Path $REPO_ROOT 'shared\git\ignore') | Out-Null
+    Assert-True (-not (Test-GitIgnoreCurrent)) 'a symlink reported current, so the menu would never replace it'
+    Write-GitIgnore
+    Assert-True (-not (Get-Item -LiteralPath $GIT_IGNORE -Force).LinkType) 'still a link'
+    Assert-True (Test-GitIgnoreCurrent) 'not current after replacing the link'
 }
 
 # ─── posh.d ───────────────────────────────────────────────────────────────────

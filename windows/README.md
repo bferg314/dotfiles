@@ -212,7 +212,7 @@ down with them.
 | `shared/nvim/init.vim` | `%LOCALAPPDATA%\nvim\init.vim` (skipped if you have an `init.lua`) |
 | `shared/starship/tokyo.toml` | `~\.config\starship.toml` |
 | `shared/mise/config.toml` | `~\.config\mise\config.toml` |
-| `shared/git/ignore` | `~\.config\git\ignore` |
+| `shared/git/ignore` | *Written* (not linked) to `~\.config\git\ignore` — see below |
 | `shared/git/gitconfig` | `[include]`d from `~\.gitconfig` |
 | `shared/git/delta.gitconfig` | `[include]`d from `~\.gitconfig`, once delta is installed |
 | `shared/zellij/config.kdl` | *Written* (not linked) to `%APPDATA%\Zellij\config\config.kdl`, with `default_shell "pwsh"` added — see [Zellij](#zellij) |
@@ -221,6 +221,18 @@ down with them.
 
 The `[include]` keeps your own `~\.gitconfig` in charge: your name, email and anything
 machine-specific stay there, and it is read after the shared file, so a setting there wins.
+
+**Why the git ignore file is a copy on Windows.** Git for Windows treats a global ignore file that is
+a *dangling* symlink as fatal — `cannot use ... as an exclude file` — for every git command in every
+repository. A link into this repo dangles whenever the checkout is on a commit without
+`shared/git/ignore` (switching to an older branch, for example), and then git cannot even run the
+`git switch` that would fix it. A copy cannot dangle, so `Link dotfiles` writes one, with a header
+line naming its source, exactly as it does for zellij's config. Edit `shared/git/ignore` and re-run
+`Link dotfiles` to update it; the status column says when the copy is out of date. Linux and macOS
+keep the symlink, because their git skips a dangling one silently.
+
+If git is already stuck with that error, run one command with the setting overridden to get out of
+it — for example `git -c core.excludesFile= switch master` — then re-run `Link dotfiles`.
 
 The `posh.d` block is written to the **AllHosts** profile for both Windows PowerShell 5.1
 (`Documents\WindowsPowerShell\profile.ps1`) and PowerShell 7 (`Documents\PowerShell\profile.ps1`),
