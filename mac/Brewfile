@@ -1,0 +1,51 @@
+# Homebrew packages for the macOS "Base tools" task -- the one list of what
+# Homebrew installs on a Mac. mac/installs/base.sh runs
+#
+#     brew bundle --file=mac/Brewfile
+#
+# which installs anything missing and leaves what is already there alone.
+# `brew bundle check --file=mac/Brewfile` reports what is missing without
+# installing; `brew bundle cleanup --file=mac/Brewfile` lists what is
+# installed but not in this file.
+#
+# Not here, on purpose:
+#   * node, python, go, uv, ruff -- mise owns runtimes (shared/mise/config.toml)
+#   * rustup                     -- upstream installer, same as Linux and Windows
+#   * gum                        -- pinned release binary, see ensure_gum
+#   * the Nerd Font              -- same GitHub release as Linux and Windows
+#   * desktop apps               -- mac/installs/desktop.sh (an opt-in task)
+
+# Core
+brew "git"
+brew "gh"
+brew "vim"
+brew "neovim"
+brew "zellij"
+brew "mise"
+
+# Shell: prompt, navigation, history
+brew "starship"
+brew "zoxide"
+brew "fzf"
+brew "atuin"
+
+# Modern CLI tools
+brew "eza"
+brew "bat"
+brew "git-delta"
+brew "lazygit"
+brew "fd"
+brew "ripgrep"
+brew "jq"
+brew "shellcheck"
+
+# yazi and its preview extras
+brew "yazi"
+brew "ffmpeg"
+brew "sevenzip"
+brew "poppler"
+brew "resvg"
+brew "imagemagick"
+
+# Containers
+cask "docker"

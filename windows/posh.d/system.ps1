@@ -1,17 +1,17 @@
 ﻿# System information functions
 function sysinfo {
     # Get Operating System Information
-    $os = Get-WmiObject -Class Win32_OperatingSystem
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem
     Write-Host "==================== SYSTEM INFORMATION ===================="
     Write-Host "Operating System: $($os.Caption)"
     Write-Host "Version: $($os.Version)"
     Write-Host "Build Number: $($os.BuildNumber)"
     Write-Host "Architecture: $($os.OSArchitecture)"
-    Write-Host "Last Boot Time: $([System.Management.ManagementDateTimeConverter]::ToDateTime($os.LastBootUpTime))"
+    Write-Host "Last Boot Time: $($os.LastBootUpTime)"
     Write-Host ""
 
     # Get Processor Information
-    $cpu = Get-WmiObject -Class Win32_Processor
+    $cpu = Get-CimInstance -ClassName Win32_Processor
     Write-Host "==================== PROCESSOR INFORMATION ===================="
     foreach ($processor in $cpu) {
         Write-Host "Name: $($processor.Name)"
@@ -22,8 +22,8 @@ function sysinfo {
     Write-Host ""
 
     # Get Memory Information
-    $os = Get-WmiObject -Class Win32_OperatingSystem
-    $computerSystem = Get-WmiObject -Class Win32_ComputerSystem
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem
+    $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     
     # Physical Memory calculations
     $totalPhysMB = [math]::Round($computerSystem.TotalPhysicalMemory / 1MB, 2)
@@ -60,7 +60,7 @@ function sysinfo {
     Write-Host ""
 
     # Get Disk Information
-    $disks = Get-WmiObject -Class Win32_LogicalDisk -Filter "DriveType=3"
+    $disks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3"
     Write-Host "==================== DISK INFORMATION ===================="
     foreach ($disk in $disks) {
         $totalGB = [math]::Round($disk.Size / 1GB, 2)
@@ -79,7 +79,7 @@ function sysinfo {
     }
 
     # Get Network Information
-    $networkAdapters = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True"
+    $networkAdapters = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True"
     Write-Host "==================== NETWORK INFORMATION ===================="
     foreach ($adapter in $networkAdapters) {
         Write-Host "Adapter: $($adapter.Description)"

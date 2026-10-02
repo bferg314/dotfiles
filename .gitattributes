@@ -1,0 +1,20 @@
+# Normalise everything to LF in the repository, and check text out with the
+# platform's own line endings -- except where a file has to stay LF on every
+# platform.
+* text=auto
+
+# Shell scripts, shell snippets and configs that are read by Unix tools. A
+# Windows checkout with core.autocrlf=true would otherwise write these with
+# CRLF, which bash refuses to run ($'\r': command not found) the moment the
+# checkout is used from WSL, a container, or copied to a Linux box.
+*.sh          text eol=lf
+*.bashrc      text eol=lf
+*.zshrc       text eol=lf
+*.kdl         text eol=lf
+*.toml        text eol=lf
+.vimrc        text eol=lf
+*.vim         text eol=lf
+gitconfig     text eol=lf
+*.gitconfig   text eol=lf
+Brewfile      text eol=lf
+*.yml         text eol=lf

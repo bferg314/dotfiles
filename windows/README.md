@@ -5,30 +5,37 @@ This directory contains configuration files and scripts for setting up a Windows
 ## Components
 
 ### PowerShell Configuration (`posh.d/`)
-- **alias-python.ps1**: Python development environment aliases and functions
+Sourced in name order from both PowerShell profiles. The PowerShell counterparts to the bash/zsh
+snippets in [`shared/shell/`](../shared/shell).
+- **alias-python.ps1**: the uv / ruff workflow (`cvenv`, `uva`, `uvr`, `lint`, `fmt`, `jl`, …)
+- **aliases.ps1**: navigation (`u`, `uu`, `u1`…`u5`), a real `touch`, `ll`, `which`, `grep`, `dotsetup`
+- **functions.ps1**: `mkcd`, `bak`, `extract`, `ff`, directory stack
+- **history.ps1**: `hg`, `ch` and `forget`, which work on PSReadLine's saved history file as well as
+  the session
 - **rust.ps1**: cargo shortcuts, and `~\.cargo\bin` on PATH for the current session
-- **system.ps1**: System information and monitoring tools
-- **history.ps1**: Enhanced command history management
-- **functions.ps1**: Utility functions for daily tasks
-- **aliases.ps1**: Common command aliases and shortcuts
+- **system.ps1**: `sysinfo` and other system information tools
+- **tools.ps1**: mise's shims on PATH, PSReadLine (predictions, menu completion, prefix history
+  search), zoxide, the fzf key bindings (Ctrl-R / Ctrl-T / Alt-C through PSFzf), and the eza / bat /
+  lazygit shortcuts, `~\go\bin` on PATH, and folgit's shell integration
+- **zprompt.ps1**: starship — sorts last so it wraps everything else
 
-### Vim Configuration (`vim/`)
-- **.vimrc**: Vim editor configuration with plugins:
-  - vim-airline for enhanced status line
-  - NERDTree for file navigation
-  - Git integration (fugitive, gitgutter)
-  - Code formatting and syntax checking
-  - Goyo & Limelight for distraction-free writing
+Shell start-up time is kept down deliberately: zoxide's and starship's init scripts are generated
+once and cached under `%LOCALAPPDATA%\dotfiles\init` (regenerated when the tool is upgraded), PSFzf
+is imported on the first keypress that needs it rather than at start-up, and mise is reached through
+shims rather than `mise activate`, so nothing it does runs on every prompt.
 
-  See [docs/vim-plugins.md](../docs/vim-plugins.md) for what each plugin does and its keyboard shortcuts.
+### Vim Configuration
+[`shared/vim/.vimrc`](../shared/vim/.vimrc) — one config for every platform and for Neovim, linked
+to `~\_vimrc`; Neovim reads it through `shared/nvim/init.vim`. See
+[docs/vim-plugins.md](../docs/vim-plugins.md) for what each plugin does and its keyboard shortcuts.
 
 ### AutoHotkey Scripts (`ahk/`)
 - **WindowsShortcuts.ahk**: Custom keyboard shortcuts for Windows
 
 ### TUI File Manager
 - **yazi**: installed by `Base tools` via winget (`sxyazi.yazi`), along with its
-  preview/navigation extras — ffmpeg, 7-Zip (already installed above), jq, poppler, fd,
-  ripgrep, fzf, zoxide and ImageMagick. Each installs independently via `Install-Package`,
+  preview/navigation extras — ffmpeg, 7-Zip, jq, poppler, fd, ripgrep, fzf, zoxide and
+  ImageMagick. Each installs independently via `Install-Package`,
   so one failing package does not block the rest. Launch with `yazi`. `resvg` (SVG preview)
   has no winget package yet; install it with Scoop if you want it.
 - Windows ships no `file` command, which yazi needs for MIME-based preview detection.
@@ -36,17 +43,21 @@ This directory contains configuration files and scripts for setting up a Windows
   (`<GitRoot>\usr\bin\file.exe`) by setting the `YAZI_FILE_ONE` user environment variable —
   reopen your terminal afterwards for it to take effect. Confirm it took with `yazi --debug`.
 
-### Zellij (`zellij/`)
-- **config.kdl**: Rounded pane frames, copy-on-select, 10k-line scrollback — the same settings as the
-  Linux and macOS copies. It is a separate file only because `default_shell` has to differ
-  (`bash` / `zsh` / `pwsh`) and zellij's config format has no include mechanism. Without the
-  `pwsh` line zellij falls back to `cmd.exe`, even when launched from PowerShell
-  ([zellij#4897](https://github.com/zellij-org/zellij/issues/4897)).
+### Zellij
+Rounded pane frames, copy-on-select, 10k-line scrollback — [`shared/zellij/config.kdl`](../shared/zellij/config.kdl),
+the same file Linux and macOS link. Windows needs one extra line, `default_shell "pwsh"`: without
+it zellij falls back to `cmd.exe`, even when launched from PowerShell
+([zellij#4897](https://github.com/zellij-org/zellij/issues/4897)). zellij's config format has no
+include mechanism, so `Link dotfiles` *writes* `%APPDATA%\Zellij\config\config.kdl` — the shared
+file plus that line, under a "generated" header — instead of linking it. Edit the shared file and
+re-run `Link dotfiles` to pick the change up; the menu's status column says when the generated copy
+is out of date. A config.kdl you wrote yourself (no header) is backed up before it is replaced.
 
 ### Shared helpers (`common.ps1`)
-Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`, and the privilege
-checks. Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
-`linux/installs/common.sh`.
+Colour output, `Install-Package` (idempotent winget wrapper), `New-DotfileLink`, the privilege
+checks, the SHA-256 and GitHub-token helpers, the git include helpers and `Install-MiseTools`.
+Dot-sourced by `setup.ps1` and every script in `installs/`. The counterpart to
+`linux/installs/common.sh`, `lib/download.sh` and `lib/shared.sh`.
 
 ### DISM needs Windows PowerShell, even under pwsh
 
@@ -132,15 +143,15 @@ guesswork.
 
 | Task | What it does |
 |---|---|
-| Link dotfiles | Links every config below and configures both PowerShell profiles |
+| Link dotfiles | Links every config in [What gets linked](#what-gets-linked), writes the zellij config, adds the shared git config as an `[include]` in `~/.gitconfig` (plus delta's pager settings once delta is installed), and configures both PowerShell profiles |
 | Shell (PowerShell 7) | Installs `pwsh` and configures its profile |
 | Editor plugins | Downloads `plug.vim` for vim and Neovim |
-| Base tools | Core dev tooling — **needs Administrator** |
+| Base tools | Everything in [`packages.psd1`](packages.psd1), the font, the PSFzf module, mise's runtimes, and the Go tools in `shared/gup/gup.json` — **needs Administrator**. See [Packages](#packages) |
 | Desktop apps | GUI applications — **needs Administrator** |
 | Server tools (SSH) | OpenSSH server, PowerShell 7 as the SSH shell, optional key-only hardening — **needs Administrator** |
 | Tailscale (VPN) | Installs the Tailscale client — **needs Administrator**. It does not log in; run `tailscale up` yourself |
 | Update from git | Fast-forwards the repo; a destructive reset requires typing `yes` |
-| Doctor (full report) | Prints every check in full, plus git identity, symlink capability and winget version. Read-only |
+| Doctor (full report) | Prints every check in full, plus git identity, symlink capability, winget version, the versions mise has active, whether mise's shims are on PATH, whether the Go tools from `shared/gup/gup.json` are installed, whether the shared git config is included, and any winget Python / Node.js / Go still installed from before mise. Read-only |
 
 The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands
 for, so you can add or remove individual rows afterwards. Tailscale is deliberately in
@@ -197,11 +208,19 @@ down with them.
 
 | Source | Target |
 |---|---|
-| `windows/vim/.vimrc` | `~\_vimrc` |
-| `starship/tokyo.toml` | `~\.config\starship.toml` |
-| `windows/zellij/config.kdl` | `%APPDATA%\Zellij\config\config.kdl` |
+| `shared/vim/.vimrc` | `~\_vimrc` |
+| `shared/nvim/init.vim` | `%LOCALAPPDATA%\nvim\init.vim` (skipped if you have an `init.lua`) |
+| `shared/starship/tokyo.toml` | `~\.config\starship.toml` |
+| `shared/mise/config.toml` | `~\.config\mise\config.toml` |
+| `shared/git/ignore` | `~\.config\git\ignore` |
+| `shared/git/gitconfig` | `[include]`d from `~\.gitconfig` |
+| `shared/git/delta.gitconfig` | `[include]`d from `~\.gitconfig`, once delta is installed |
+| `shared/zellij/config.kdl` | *Written* (not linked) to `%APPDATA%\Zellij\config\config.kdl`, with `default_shell "pwsh"` added — see [Zellij](#zellij) |
 | `windows/ahk/WindowsShortcuts.ahk` | Startup folder |
 | `windows/posh.d/*.ps1` | Sourced from both PowerShell profiles |
+
+The `[include]` keeps your own `~\.gitconfig` in charge: your name, email and anything
+machine-specific stay there, and it is read after the shared file, so a setting there wins.
 
 The `posh.d` block is written to the **AllHosts** profile for both Windows PowerShell 5.1
 (`Documents\WindowsPowerShell\profile.ps1`) and PowerShell 7 (`Documents\PowerShell\profile.ps1`),
@@ -231,7 +250,17 @@ PASS/FAIL and exit non-zero on failure. Run one directly:
 ```powershell
 pwsh -NoProfile -File windows\tests\wezterm-cleanup.tests.ps1
 pwsh -NoProfile -File windows\tests\menu.tests.ps1
+pwsh -NoProfile -File windows\tests\toolchain.tests.ps1
 ```
+
+CI runs all three under both hosts on every push, along with PSScriptAnalyzer (see
+[Checks](../readme.md#checks) in the top-level readme).
+
+`toolchain.tests.ps1` covers the winget manifest (unique ids, nothing mise now provides, build tools
+before rustup), checksum parsing and verification, the git include helpers against a throwaway
+`GIT_CONFIG_GLOBAL`, the generated zellij config (written without a BOM; your own config backed up),
+the init-script cache, and that every `posh.d` file loads cleanly in a fresh shell — including that
+`ls | Where-Object …` still works.
 
 They are worth running under **both** hosts, since `setup.ps1` supports Windows PowerShell 5.1 as
 well as PowerShell 7:
@@ -252,7 +281,35 @@ a sandbox, so it tests the shipped source without touching your real config.
 ## Packages
 
 Installs use **winget**, which ships with Windows 10 1809+ and Windows 11 as part of "App Installer".
-Chocolatey is no longer used. Package IDs live in `installs/base.ps1` and `installs/desktop.ps1`.
+Chocolatey is no longer used.
+
+**[`packages.psd1`](packages.psd1) is the one list of what `Base tools` installs with winget** — the
+counterpart to `mac/Brewfile`. Each entry is a winget id, a display name, and optionally extra
+`winget install` arguments; `installs/base.ps1` installs them in order, each independently, and
+reports any failures at the end. To add a tool, add a line (check the id with
+`winget show --id <id>`) and re-run Base tools. Desktop apps stay in `installs/desktop.ps1`.
+
+Beyond the manifest, `Base tools` also:
+- installs the **FiraCode Nerd Font** from its GitHub release, verified against the release's
+  `SHA-256.txt` (see [Font](#font));
+- installs the **PSFzf** PowerShell module for both Windows PowerShell 5.1 and PowerShell 7, which
+  keep separate module folders;
+- runs `mise install` for node, python, go, uv, ruff and gup, and puts mise's shims
+  (`%LOCALAPPDATA%\mise\shims`) at the front of your user PATH, so every program — not only
+  PowerShell — gets mise's versions;
+- runs `gup import` on [`shared/gup/gup.json`](../shared/gup/gup.json), which builds the Go tools
+  listed there — currently [folgit](https://github.com/bferg314/folgit) — into
+  `%USERPROFILE%\go\bin` with mise's Go, and adds that folder to your user PATH. `gup update`
+  keeps them current afterwards;
+- lists anything from the manifest's `Superseded` section that is still installed — the winget
+  Python 3.14, Node.js LTS and Go that earlier versions of this repo installed and mise now
+  replaces — with the `winget uninstall` command for each. It never removes them itself.
+
+**Runtimes come from mise, not winget.** `shared/mise/config.toml` pins them for all three
+platforms, so the Python or Node you get on Windows is the same version as on Linux and macOS.
+
+GitHub API calls (finding the latest font release) use `$env:GH_TOKEN`, `$env:GITHUB_TOKEN` or
+the `gh` CLI's login when one is available, which lifts the 60-an-hour anonymous rate limit.
 
 `bootstrap.ps1` and `Install Base Tools` both install **UniGetUI** (`Devolutions.UniGetUI`), a GUI over
 winget, scoop, chocolatey, pip and npm. Its package id has moved twice — WingetUI, then
@@ -269,14 +326,23 @@ There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local
 - `cfmt`: cargo fmt
 - `ccl`: cargo clippy
 
-### Python Development
-- `py`: Run Python
-- `cvenv`: Create virtual environment
-- `avenv`: Activate virtual environment
-- `dvenv`: Deactivate virtual environment
-- `pip-upgrade`: Update all pip packages
-- `pt`: Run pytest
-- `pr`: Run Django development server
+### Python Development (uv + ruff)
+- `cvenv` / `avenv` / `dvenv`: create (`uv venv`) / activate / deactivate `.venv`
+- `uvi`, `uva`, `uvad`, `uvs`, `uvr`: `uv init`, `uv add`, `uv add --dev`, `uv sync`, `uv run`
+- `pipi` / `pipf`: install from / write `requirements.txt` (through `uv pip`)
+- `pt`: pytest in the project environment
+- `pr`: Django development server
+- `lint` / `lintf` / `fmt`: `ruff check`, `ruff check --fix`, `ruff format`
+- `jn` / `jl` / `ipy`: Jupyter Notebook / Lab / IPython on top of the project environment
+
+### Shell
+- `z <part of a path>` / `zi`: jump to a directory you have visited (zoxide)
+- Ctrl-R: fuzzy history search. Ctrl-T: fuzzy-pick a path. Alt-C: fuzzy `cd`
+- Up/Down: history search for lines starting with what you have typed
+- F2: switch history predictions between the dropdown list and inline
+- `l` / `ll` / `la` / `lt`: eza listings (`lt` is a tree). `ls` itself is still `Get-ChildItem`
+- `batp`: `bat` without paging. `lg`: lazygit
+- `hg <text>`: search saved history. `forget`: drop the last command. `ch`: clear history
 
 ### System Commands
 - `sysinfo`: Display system information
@@ -287,10 +353,13 @@ There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local
 
 ### Dotfiles
 - `dotsetup`: Open the setup menu from anywhere, the same as the Linux `dotsetup`. Available once
-  `Create Links` has configured your profile and you have opened a new shell.
+  `Link dotfiles` has configured your profile and you have opened a new shell.
+- `Edit-Profile`, `Edit-Aliases`, `Edit-Mise`: open the profile, `aliases.ps1` or the mise config
+  in VS Code
 
 ### File Operations
 - `mkcd`: Create and enter directory
+- `touch`: Create a file, or update its timestamp if it exists
 - `bak`: Create backup of a file
 - `extract`: Extract various archive formats
 - `ff`: Find files by pattern
@@ -300,8 +369,8 @@ There is no `avahi` counterpart to the Linux setup: Windows 10+ resolves `.local
 - winget (App Installer) — for the install options
 - Developer Mode or Administrator — for real symlinks
 
-Git, Python 3.14, Vim, zellij, starship, rustup, AutoHotkey, UniGetUI and the terminal font are all
-installed by `Install Base Tools`.
+Everything else — git, vim, Neovim, mise and its runtimes, starship, the CLI tools, zellij, rustup,
+AutoHotkey, UniGetUI and the terminal font — is installed by `Base tools`.
 
 `rustup` is installed after the VS Build Tools on purpose: the default `x86_64-pc-windows-msvc`
 toolchain needs the MSVC linker, and rustup only warns about a missing one rather than failing.
@@ -312,9 +381,9 @@ toolchain needs the MSVC linker, and rustup only warns about a missing one rathe
 Everything assumes **FiraCode Nerd Font Mono** at size 16 — the starship prompt and vim-airline both
 draw glyphs that only a Nerd Font provides.
 
-winget carries exactly one Nerd Font (JetBrainsMono), so `Install Base Tools` fetches FiraCode from the
-[ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release instead — see `Install-NerdFont`
-in `common.ps1`. It installs per-user (no elevation needed) into `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
+winget carries exactly one Nerd Font (JetBrainsMono), so `Base tools` fetches FiraCode from the
+[ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) release instead, and verifies it
+against the release's `SHA-256.txt` before installing — see `Install-NerdFont` in `common.ps1`. It installs per-user (no elevation needed) into `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
 and registers each face under `HKCU`, which is what makes a per-user font visible to applications.
 
 Only the `Mono` faces are installed; the archive also ships proportional and non-Mono families that
@@ -323,4 +392,9 @@ whichever one you use (Windows Terminal, VS Code) to `FiraCode Nerd Font Mono` b
 
 ## Customization
 
-Add your own PowerShell scripts to `posh.d/` and they will be automatically sourced on startup.
+- **A PowerShell snippet:** add a `.ps1` to `posh.d/`; it is sourced on startup, in name order.
+- **A winget package:** add it to `packages.psd1`.
+- **A runtime version:** `mise use -g node@22` for this machine; edit `shared/mise/config.toml`
+  for every machine.
+- **Git settings for this machine:** put them in `~\.gitconfig` itself, which wins over the shared
+  include.

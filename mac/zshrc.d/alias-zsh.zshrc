@@ -1,13 +1,18 @@
-# Common shell aliases and navigation shortcuts
+# shellcheck shell=bash
+# zsh- and macOS-specific aliases. Everything shared with bash on Linux is in
+# shared/shell/, which Link dotfiles links into ~/.zshrc.d alongside this.
 
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
-alias u='cd ..'
-alias uu='cd ../..'
-alias uuu='cd ../../..'
-alias uuuu='cd ../../../..'
-alias grep='grep --color=auto'
+# BSD ls colour flag (GNU ls on Linux uses --color=auto instead)
+alias ls='ls -G'
+
+# Reload and edit this shell's config
+alias rc='source ~/.zshrc && clear'
+alias e_zsh='vim ~/.zshrc'
+
+# System (macOS tools)
+alias ports='lsof -iTCP -sTCP:LISTEN -n -P'   # listening TCP ports
+alias disk='df -h /'                          # root volume usage
+alias flushdns='sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder'
 
 # Run dotfiles setup from anywhere - the counterpart to dotsetup in
 # linux/bashrc.d/alias-bash.bashrc and windows/posh.d/aliases.ps1.

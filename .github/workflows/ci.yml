@@ -1,0 +1,148 @@
+# Checks every push and pull request:
+#   lint      shellcheck on every shell file; bash 3.2 syntax for what macOS runs
+#   linux     Link dotfiles + the full mise toolchain + an interactive bash, on
+#             the four distro families the installers support
+#   macos     the same with zsh and Homebrew, plus a Brewfile parse
+#   windows   the PowerShell test suites on 5.1 and 7, and PSScriptAnalyzer
+#   editor    vim and Neovim load the shared vimrc with every plugin
+#
+# Everything here can be run locally too; README.md ("Checks") has the commands.
+
+name: CI
+
+# Pushes to master, and pull requests. Not every branch push: a branch with an
+# open PR would otherwise run every job twice, once per trigger.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: shellcheck + bash 3.2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          shellcheck --version | head -2
+          find . -type f \( -name '*.sh' -o -name '*.bashrc' -o -name '*.zshrc' \) \
+              -not -path './shared/shell/vendor/*' -not -path './.git/*' -print0 |
+            xargs -0 shellcheck -S warning -x
+
+      # macOS ships bash 3.2 and the setup menu runs under it there; a bash 4
+      # feature in any of these is a syntax error on a real Mac.
+      - name: bash 3.2 syntax
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" bash:3.2 bash -c '
+            status=0
+            for f in /repo/lib/*.sh /repo/mac/*.sh /repo/mac/installs/*.sh /repo/bootstrap.sh /repo/shared/shell/*.sh; do
+              bash -n "$f" || status=1
+            done
+            exit $status'
+
+  linux:
+    name: linux (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:13
+            prep: apt-get update -qq && apt-get install -y -qq git curl ca-certificates xz-utils
+          - image: ubuntu:24.04
+            prep: apt-get update -qq && apt-get install -y -qq git curl ca-certificates xz-utils
+          - image: fedora:43
+            prep: dnf install -y -q git curl xz
+          - image: archlinux:latest
+            prep: pacman -Sy --noconfirm --needed git curl
+    steps:
+      - uses: actions/checkout@v4
+
+      # The token lifts mise's GitHub downloads past the 60-an-hour anonymous
+      # API limit, which a matrix of runners on shared IPs can hit.
+      - name: smoke test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -t -e GITHUB_TOKEN -v "$PWD:/repo:ro" ${{ matrix.image }} bash -c '
+            ${{ matrix.prep }} >/dev/null &&
+            cp -r /repo /dotfiles &&
+            bash /dotfiles/tests/unix-smoke.sh linux --tools'
+
+  macos:
+    name: macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Brewfile parses
+        run: brew bundle list --all --file=mac/Brewfile
+
+      - name: smoke test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        # /bin/bash is the system bash 3.2, which is what runs setup.sh on a Mac.
+        run: /bin/bash tests/unix-smoke.sh mac --tools
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: tests (PowerShell 7)
+        shell: pwsh
+        run: |
+          $failed = 0
+          foreach ($t in Get-ChildItem windows/tests -Filter *.tests.ps1) {
+            Write-Host "== $($t.Name)"
+            pwsh -NoProfile -File $t.FullName
+            if ($LASTEXITCODE -ne 0) { $failed++ }
+          }
+          exit $failed
+
+      - name: tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $failed = 0
+          foreach ($t in Get-ChildItem windows/tests -Filter *.tests.ps1) {
+            Write-Host "== $($t.Name)"
+            powershell -NoProfile -File $t.FullName
+            if ($LASTEXITCODE -ne 0) { $failed++ }
+          }
+          exit $failed
+
+      # Fails on errors only. The warnings are mostly deliberate -- Write-Host
+      # is how a console menu prints -- and are listed for reading, not gating.
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse
+          $results | Group-Object RuleName | Sort-Object Count -Descending |
+            Format-Table Count, Name -AutoSize
+          $errors = @($results | Where-Object { $_.Severity -in 'Error', 'ParseError' })
+          $errors | Format-Table ScriptName, Line, RuleName, Message -AutoSize -Wrap
+          exit $errors.Count
+
+  editor:
+    name: vim + neovim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: smoke test
+        run: |
+          docker run --rm -t -v "$PWD:/repo:ro" debian:13 bash -c '
+            apt-get update -qq && apt-get install -y -qq git curl ca-certificates vim neovim >/dev/null &&
+            bash /repo/tests/vim-smoke.sh'

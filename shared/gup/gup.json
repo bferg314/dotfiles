@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "name": "folgit",
+      "import_path": "github.com/bferg314/folgit/cmd/folgit",
+      "version": "latest",
+      "channel": "latest"
+    }
+  ]
+}

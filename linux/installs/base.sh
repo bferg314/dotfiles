@@ -6,6 +6,11 @@ set -e  # Exit on error
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
+# setup.sh exports REPO_ROOT; work it out when this is run on its own.
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# shellcheck source=lib/shared.sh
+. "$REPO_ROOT/lib/shared.sh"
+
 echo -e "${BOLD}${CYAN}=== Base Tools Installation ===${NC}"
 echo
 
@@ -35,6 +40,16 @@ else
     pkg_install vim
 fi
 ok "Vim installed"
+
+# Neovim reads the same vimrc (shared/nvim/init.vim). Optional: the RHEL family
+# only carries it in EPEL, so skip it where the repos do not have it.
+if command -v nvim >/dev/null 2>&1; then
+    ok "Neovim already installed"
+elif pkg_available neovim; then
+    pkg_install neovim && ok "Neovim installed"
+else
+    info "Neovim is not in this distro's repos (enable EPEL on RHEL-family systems); skipping"
+fi
 echo
 
 # 2. Install Docker
@@ -79,19 +94,9 @@ else
 fi
 echo
 
-# 3. Install zellij
+# 3. Install zellij (checksum-verified release binary; Arch's own package)
 step "Installing zellij..."
-if [ "$PKG_MANAGER" = "pacman" ]; then
-    pkg_install zellij
-else
-    ZELLIJ_ARCH="$(detect_arch)" || die "Unsupported architecture for the zellij binary release: $(uname -m)"
-    ZELLIJ_VERSION="$(github_latest_tag zellij-org/zellij)"
-    [ -n "$ZELLIJ_VERSION" ] || die "Could not determine the latest zellij release (GitHub API rate limit?)"
-    info "Installing zellij ${ZELLIJ_VERSION} (${ZELLIJ_ARCH})"
-    curl -fsSL "https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-${ZELLIJ_ARCH}-unknown-linux-musl.tar.gz" | tar -xz -C "$TMP_DIR"
-    sudo install -m 755 "$TMP_DIR/zellij" /usr/local/bin/zellij
-fi
-ok "zellij installed"
+install_zellij || warn "Continuing without zellij; re-run this script to retry."
 echo
 
 # 3a. Install gum, which draws the setup menu's checklist.
@@ -105,88 +110,27 @@ install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono
     warn "Continuing without the font; prompt glyphs will not render."
 echo
 
-# 4. Install Python and pip
+# 4. System Python
 #
-# PYTHON_SERIES is the version this repo targets. Where a distro packages that
-# series under a versioned name it is installed explicitly; otherwise the
-# generic python3 goes in and the difference is reported rather than papered
-# over. Arch tracks upstream closely enough that plain `python` is the target.
-PYTHON_SERIES="3.14"
-
-step "Installing Python ${PYTHON_SERIES} and pip..."
+# Only the distro's own python3, for the distro's tools and for scripts that
+# expect /usr/bin/python3. The Python you develop with is mise's (pinned in
+# shared/mise/config.toml), which is the same version on every distro -- no
+# more checking whether this one packages python3.14.
+step "Installing system python3..."
 case "$PKG_MANAGER" in
-    pacman)
-        pkg_install python python-pip
-        ;;
-    dnf)
-        if pkg_available "python${PYTHON_SERIES}"; then
-            pkg_install "python${PYTHON_SERIES}" python3-pip
-        else
-            warn "python${PYTHON_SERIES} is not in this distro's repos - installing the default python3"
-            pkg_install python3 python3-pip
-        fi
-        ;;
-    apt)
-        if pkg_available "python${PYTHON_SERIES}"; then
-            # -venv is split out of the interpreter on Debian and Ubuntu, and
-            # the alias-python.bashrc `cvenv` shortcut needs it.
-            pkg_install "python${PYTHON_SERIES}" "python${PYTHON_SERIES}-venv" python3-pip
-        else
-            warn "python${PYTHON_SERIES} is not in this distro's repos - installing the default python3"
-            pkg_install python3 python3-pip
-        fi
-        ;;
+    pacman) pkg_install python ;;
+    *)      pkg_install python3 ;;
 esac
-
-DEFAULT_PYTHON="$(python3 --version 2>&1 | awk '{print $2}')"
-if command -v "python${PYTHON_SERIES}" >/dev/null 2>&1; then
-    ok "Python $("python${PYTHON_SERIES}" --version | awk '{print $2}') and pip installed"
-    case "$DEFAULT_PYTHON" in
-        "${PYTHON_SERIES}".*) ;;
-        *) info "python3 still resolves to ${DEFAULT_PYTHON}; use python${PYTHON_SERIES} for new virtualenvs" ;;
-    esac
-else
-    ok "Python ${DEFAULT_PYTHON} and pip installed"
-    case "$DEFAULT_PYTHON" in
-        "${PYTHON_SERIES}".*) ;;
-        *) warn "This distro has no Python ${PYTHON_SERIES} package; ${DEFAULT_PYTHON} is the newest available" ;;
-    esac
-fi
+ok "System python3 installed ($(python3 --version 2>&1 | awk '{print $2}'))"
 echo
 
-# 5. Install Node Version Manager (nvm) and LTS Node
-step "Installing Node Version Manager (nvm)..."
-if [ ! -d "$HOME/.nvm" ]; then
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-else
-    ok "nvm already installed"
-fi
-
-export NVM_DIR="$HOME/.nvm"
-# nvm.sh returns non-zero in some paths; don't let errexit kill the script here
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-    set +e
-    \. "$NVM_DIR/nvm.sh"
-    set -e
-fi
-
-if command -v nvm >/dev/null 2>&1; then
-    step "Installing/updating Node.js LTS..."
-    nvm install --lts
-    nvm use --lts
-    ok "Node.js LTS installed"
-else
-    warn "nvm did not load in this shell; open a new shell and run 'nvm install --lts'"
-fi
-echo
-
-# 6. Install Development Tools
+# 5. Install Development Tools
 step "Installing development tools..."
 pkg_install_devtools
 ok "Development tools installed"
 echo
 
-# 6b. Install the Rust toolchain
+# 5b. Install the Rust toolchain
 # After the development tools above: the default toolchain links with cc, and
 # rustup only warns about a missing linker rather than failing.
 # set -e is active, and a failed rustup should not abort the whole base install.
@@ -194,13 +138,23 @@ step "Installing rustup..."
 install_rustup || warn "Continuing without Rust; re-run this script or see https://rustup.rs"
 echo
 
-# 6c. Install the Go toolchain
-# set -e is active, and a failed Go install should not abort the whole base install.
-step "Installing Go..."
-install_go || warn "Continuing without Go; re-run this script or see https://go.dev/dl"
+# 5c. Install mise, then everything in shared/mise/config.toml: node, python,
+# go, uv, ruff, and the CLI tools distros do not package (starship, fzf, eza,
+# bat, delta, lazygit, atuin). Replaces the old nvm, distro python3.14 and
+# /usr/local/go installs.
+# set -e is active, and a failed tool should not abort the whole base install.
+step "Installing mise..."
+if install_mise; then
+    mise_install_tools || warn "Re-run 'mise install' in a new shell to finish."
+    # Go tools that only ship as source (folgit, ...), through gup -- see
+    # shared/gup/README.md. Needs mise's go, so it comes after the line above.
+    go_tools_install || true
+else
+    warn "Continuing without mise; see https://mise.jdx.dev/installing-mise.html"
+fi
 echo
 
-# 7. Install and configure Git
+# 6. Install and configure Git
 step "Installing git..."
 pkg_install git
 ok "Git installed"
@@ -222,7 +176,7 @@ echo -e "  ${BOLD}Name:${NC} $(git config --global user.name)"
 echo -e "  ${BOLD}Email:${NC} $(git config --global user.email)"
 echo
 
-# 8. Install GitHub CLI
+# 7. Install GitHub CLI
 step "Installing GitHub CLI..."
 if [ "$PKG_MANAGER" = "pacman" ]; then
     pkg_install github-cli
@@ -248,7 +202,7 @@ fi
 ok "GitHub CLI installed ($(gh --version 2>/dev/null | head -n1))"
 echo
 
-# 9. Install yazi (TUI file manager)
+# 8. Install yazi (TUI file manager)
 #
 # Arch packages it directly. Fedora and the RHEL family get it from the
 # lihaohong/yazi COPR, which also targets EL9+ chroots. Debian and Ubuntu get
@@ -274,19 +228,20 @@ elif [ "$PKG_MANAGER" = "apt" ]; then
 fi
 ok "yazi installed ($(yazi --version 2>/dev/null || echo 'version unknown'))"
 
-# 9b. Install yazi's preview and navigation extras.
+# 8b. Install yazi's preview and navigation extras.
 #
 # Best-effort and per-package: yazi itself is fully usable without any of
 # these, they just turn on richer previews (video, archives, PDF, images) and
-# the fd/rg/fzf/zoxide jump integrations. Package availability varies a lot
+# the fd/rg jump integrations; fzf and zoxide come from mise (5c above), which
+# keeps them current where distros lag. Package availability varies a lot
 # across the four families, so each is checked with pkg_available first
 # rather than batching them into one command that a single missing name would
-# fail entirely (pacman is the exception: yazi's own docs give this exact
-# line as tested against Arch's official repos).
+# fail entirely (pacman is the exception: yazi's own docs list these names as
+# available in Arch's official repos).
 step "Installing yazi preview/navigation extras..."
 case "$PKG_MANAGER" in
     pacman)
-        pkg_install ffmpeg 7zip jq poppler fd ripgrep fzf zoxide resvg imagemagick
+        pkg_install ffmpeg 7zip jq poppler fd ripgrep resvg imagemagick
         ;;
     dnf | apt)
         YAZI_EXTRAS=""
@@ -299,8 +254,6 @@ case "$PKG_MANAGER" in
             _want poppler-utils || true
             _want fd-find || true
             _want ripgrep || true
-            _want fzf || true
-            _want zoxide || true
             { _want ffmpeg || _want ffmpeg-free; } || true
             _want ImageMagick || true
         else
@@ -309,8 +262,6 @@ case "$PKG_MANAGER" in
             _want poppler-utils || true
             _want fd-find || true
             _want ripgrep || true
-            _want fzf || true
-            _want zoxide || true
             _want ffmpeg || true
             _want imagemagick || true
         fi
@@ -331,11 +282,15 @@ esac
 ok "yazi extras installed"
 echo
 
+# 9. delta is installed by mise above; now that it exists, make it git's pager.
+dot_git_delta_include || true
+echo
+
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
 echo
 echo -e "${YELLOW}IMPORTANT: If this is your first time installing Docker, you need to"
 echo -e "log out and log back in for the docker group changes to take effect.${NC}"
 echo
+echo -e "${BLUE}Open a new shell to pick up mise, starship, zoxide, fzf and atuin.${NC}"
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
-echo -e "${BLUE}cargo and rustc land on PATH in a new shell (bashrc.d/rust.bashrc): ${BOLD}rustup show${NC}"
-echo -e "${BLUE}go lands on PATH in a new shell (bashrc.d/go.bashrc): ${BOLD}go version${NC}"
+echo -e "${BLUE}Check what mise manages: ${BOLD}mise ls${NC}${BLUE}   Rust: ${BOLD}rustup show${NC}"

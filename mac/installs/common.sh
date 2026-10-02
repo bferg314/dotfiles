@@ -11,6 +11,8 @@
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 
+# Used by the scripts that source this file, not by this file itself.
+# shellcheck disable=SC2034
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -24,6 +26,10 @@ ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}  ! $1${NC}"; }
 info() { echo -e "${BLUE}  → $1${NC}"; }
 die()  { echo -e "${RED}✗ $1${NC}" >&2; exit 1; }
+
+# GitHub API (with your token when one is available) and SHA-256 checks.
+# shellcheck source=lib/download.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/download.sh"
 
 # ─── Homebrew ─────────────────────────────────────────────────────────────────
 
@@ -129,12 +135,6 @@ detect_arch() {
     esac
 }
 
-# Latest release tag for a GitHub repo, e.g. github_latest_tag charmbracelet/gum
-github_latest_tag() {
-    curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
-        grep '"tag_name"' | head -n1 | cut -d'"' -f4
-}
-
 # ─── gum ──────────────────────────────────────────────────────────────────────
 
 # gum draws the multi-select checklist in the setup menu. It is optional: the
@@ -182,11 +182,11 @@ ensure_gum() {
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' RETURN
 
-    if ! curl -fsSL "https://github.com/charmbracelet/gum/releases/download/${tag}/gum_${version}_Darwin_${arch}.tar.gz" |
-            tar -xz -C "$tmp"; then
-        warn "Failed to download or extract gum ${tag}"
-        return 1
-    fi
+    local release="https://github.com/charmbracelet/gum/releases/download/${tag}"
+    local asset="gum_${version}_Darwin_${arch}.tar.gz"
+    curl -fsSL "$release/$asset" -o "$tmp/$asset" || { warn "Failed to download gum ${tag}"; return 1; }
+    verify_sha256 "$tmp/$asset" "$(checksum_from_list "$release/checksums.txt" "$asset")" || return 1
+    tar -xzf "$tmp/$asset" -C "$tmp" || { warn "Failed to extract gum ${tag}"; return 1; }
 
     local binary
     binary="$(find "$tmp" -type f -name gum -perm -u+x 2>/dev/null | head -n1)"
@@ -205,4 +205,45 @@ ensure_gum() {
         *":$HOME/.local/bin:"*) ;;
         *) warn "$HOME/.local/bin is not on PATH, so the menu will not find gum until it is" ;;
     esac
+}
+
+# ─── Fonts ────────────────────────────────────────────────────────────────────
+
+# Install a Nerd Font from the upstream GitHub release into ~/Library/Fonts,
+# checksum-verified -- the counterpart to install_nerd_font in
+# linux/installs/common.sh.
+#     install_nerd_font <archive> <file glob> <display name>
+install_nerd_font() {
+    local archive="$1" pattern="$2" name="$3"
+    local font_dir="$HOME/Library/Fonts"
+
+    step "Installing $name..."
+
+    # shellcheck disable=SC2086
+    if ls "$font_dir"/$pattern >/dev/null 2>&1; then
+        ok "$name already installed"
+        return 0
+    fi
+
+    local tag
+    tag="$(github_latest_tag ryanoasis/nerd-fonts)"
+    [ -n "$tag" ] || { warn "Could not determine the latest nerd-fonts release (GitHub API unreachable?)"; return 1; }
+    info "nerd-fonts $tag"
+
+    local tmp
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' RETURN
+
+    local release="https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}"
+    curl -fsSL "$release/${archive}.tar.xz" -o "$tmp/${archive}.tar.xz" ||
+        { warn "Failed to download ${archive}.tar.xz"; return 1; }
+    verify_sha256 "$tmp/${archive}.tar.xz" "$(checksum_from_list "$release/SHA-256.txt" "${archive}.tar.xz")" || return 1
+    tar -xJf "$tmp/${archive}.tar.xz" -C "$tmp" || { warn "Failed to extract ${archive}.tar.xz"; return 1; }
+
+    mkdir -p "$font_dir"
+    # Only the requested variant: the archive also carries the proportional and
+    # non-Mono families.
+    # shellcheck disable=SC2086
+    cp $tmp/$pattern "$font_dir/" 2>/dev/null || { warn "No files matching $pattern in ${archive}.tar.xz"; return 1; }
+    ok "$name installed ($tag)"
 }

@@ -9,18 +9,31 @@ for ($i = 1; $i -le 5; $i++) {
 
 # Shorter commands for common operations
 Set-Alias c Clear-Host
-Set-Alias touch New-Item
+
+# ll falls back to Get-ChildItem; tools.ps1 replaces it with eza when eza is
+# installed. `ls` itself is left as Get-ChildItem on purpose: it returns file
+# objects, so `ls | Where-Object Length -gt 1MB` and friends keep working.
+# (An earlier version pointed ls at Format-Wide | Out-Host, which printed
+# nicely but silently broke every pipeline that started with ls.)
 Set-Alias ll Get-ChildItem
 
-# Directory listing with colors
-function ls_color { Get-ChildItem | Format-Wide -AutoSize | Out-Host }
-# ls ships as an AllScope alias in Windows PowerShell 5.1, and overriding it
-# without -Force -Option AllScope errors on every shell start.
-Set-Alias ls ls_color -Force -Option AllScope
+# touch: create the file if it is missing, otherwise update its timestamp --
+# what the Unix command does. A bare New-Item alias errored on existing files.
+function touch {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Path)
+    foreach ($p in $Path) {
+        if (Test-Path -LiteralPath $p) {
+            (Get-Item -LiteralPath $p).LastWriteTime = Get-Date
+        } else {
+            New-Item -ItemType File -Path $p | Out-Null
+        }
+    }
+}
 
 # Quick edits
 function Edit-Profile { code $PROFILE }
 function Edit-Aliases { code $PSScriptRoot\aliases.ps1 }
+function Edit-Mise    { code "$HOME\.config\mise\config.toml" }
 
 # Run dotfiles setup from anywhere - the counterpart to dotsetup in
 # linux/bashrc.d/alias-bash.bashrc.

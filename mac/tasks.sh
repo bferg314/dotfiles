@@ -4,6 +4,9 @@
 #
 # SCRIPT_DIR and REPO_ROOT are set by setup.sh before this is sourced.
 
+# shellcheck source=lib/shared.sh
+. "$REPO_ROOT/lib/shared.sh"
+
 # ─── Status probes ────────────────────────────────────────────────────────────
 
 _missing_commands() {
@@ -24,7 +27,7 @@ _missing_apps() {
 }
 
 status_links() {
-    local target
+    local target missing
     if [ ! -d "$HOME/.zshrc.d" ]; then
         printf 'not linked'
         return 1
@@ -35,8 +38,19 @@ status_links() {
         "") printf 'links present but broken'; return 1 ;;
         *) printf 'linked to another checkout'; return 1 ;;
     esac
+    # Linked before shared/ existed: the old per-platform snippets are gone and
+    # the shared ones are not linked in yet.
+    if [ ! -e "$HOME/.zshrc.d/tools.sh" ]; then
+        printf 'linked, but missing the shared snippets - re-run'
+        return 1
+    fi
     if ! grep -q "Source all files from zshrc.d directory" "$HOME/.zshrc" 2>/dev/null; then
         printf 'linked, but ~/.zshrc does not source them'
+        return 1
+    fi
+    missing="$(dot_shared_missing)"
+    if [ -n "$missing" ]; then
+        printf 'not linked: %s' "$missing"
         return 1
     fi
     printf 'linked'
@@ -65,12 +79,24 @@ status_shell() {
 }
 
 status_base() {
-    local missing
-    missing="$(_missing_commands brew git node rustup zellij gum yazi)"
+    local missing mise_missing go_missing
+    missing="$(_missing_commands brew git rustup zellij gum yazi starship)"
     [ -d "/Applications/Docker.app" ] || missing="${missing:+$missing, }Docker"
 
+    # mise's own tools (node, python, uv...) are checked through mise rather
+    # than PATH: they only reach PATH in a shell that has run `mise activate`.
+    if mise_missing="$(mise_tools_missing)"; then
+        [ -n "$mise_missing" ] && missing="${missing:+$missing, }$mise_missing"
+    else
+        missing="${missing:+$missing, }mise"
+    fi
+    # The `go install` tools from shared/gup/gup.json, looked for in ~/go/bin.
+    if go_missing="$(go_tools_missing)" && [ -n "$go_missing" ]; then
+        missing="${missing:+$missing, }$go_missing"
+    fi
+
     # install_rustup runs with --no-modify-path -- ~/.cargo/bin only reaches
-    # PATH through zshrc.d/rust.zshrc, which "Link dotfiles" is what actually
+    # PATH through shared/shell/rust.sh, which "Link dotfiles" is what actually
     # links in. `command -v rustup` alone cannot tell "never installed" apart
     # from "installed, but Link dotfiles hasn't run (or this shell predates
     # it)", and reporting the latter as plain "missing" sends you chasing a
@@ -129,12 +155,8 @@ status_update() { menu_update_status; }
 # ─── Handlers ─────────────────────────────────────────────────────────────────
 
 task_links() {
-    mkdir -p "$HOME/.zshrc.d"
-    ln -s -f "$REPO_ROOT/mac/zshrc.d/"* "$HOME/.zshrc.d/"
-
-    ln -s -f "$REPO_ROOT/mac/vim/.vimrc" "$HOME/.vimrc"
-    mkdir -p "$HOME/.config/zellij"
-    ln -s -f "$REPO_ROOT/mac/zellij/config.kdl" "$HOME/.config/zellij/config.kdl"
+    dot_link_shell "$HOME/.zshrc.d" "$REPO_ROOT/mac/zshrc.d"
+    dot_link_shared
 
     _link_rc "$HOME/.zshrc" ""
     [ -f "$HOME/.bashrc" ] && _link_rc "$HOME/.bashrc" " (shared with zsh)"
@@ -286,6 +308,14 @@ task_doctor() {
     printf '%b\n' "${BOLD}Git identity${NC}"
     info "name:     $(git config --global user.name 2>/dev/null || echo '(unset)')"
     info "email:    $(git config --global user.email 2>/dev/null || echo '(unset)')"
+    printf '\n'
+
+    printf '%b\n' "${BOLD}Toolchain${NC}"
+    dot_toolchain_report
+    printf '\n'
+
+    printf '%b\n' "${BOLD}Old toolchain leftovers${NC}"
+    dot_legacy_report
     printf '\n'
 
     printf '%b\n' "${BOLD}Tasks${NC}"

@@ -1,0 +1,26 @@
+# Global gitignore, linked to ~/.config/git/ignore (core.excludesFile in
+# shared/git/gitconfig). Only things no repository should ever track belong
+# here; anything project-specific goes in that project's .gitignore.
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editors
+*.swp
+*.swo
+*~
+.vscode/*.log
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local environment files
+.env.local
+.direnv/

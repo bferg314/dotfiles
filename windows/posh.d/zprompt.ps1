@@ -12,18 +12,13 @@
 # `starship init powershell` only emits a stub that shells out to
 # `--print-full-init`, so the plain form costs two starship spawns on every
 # shell start. Generate the full init once and cache it, re-generating only
-# when the starship binary is newer than the cache.
-$starship = Get-Command starship -ErrorAction SilentlyContinue
+# when the starship binary is newer than the cache (Get-CachedInitScript, in
+# tools.ps1, which sorts before this file).
+$starship = Get-Command starship -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($starship) {
-    $initCache = Join-Path $env:LOCALAPPDATA 'starship\init.ps1'
-    $cached = Get-Item -LiteralPath $initCache -ErrorAction SilentlyContinue
-    $binary = Get-Item -LiteralPath $starship.Source -ErrorAction SilentlyContinue
-    if (-not $cached -or ($binary -and $cached.LastWriteTime -lt $binary.LastWriteTime)) {
-        $null = New-Item -ItemType Directory -Force -Path (Split-Path $initCache)
-        & $starship.Source init powershell --print-full-init | Set-Content -LiteralPath $initCache -Encoding utf8
-    }
-    . $initCache
+    . (Get-CachedInitScript -Name starship -Command $starship -Arguments @('init', 'powershell', '--print-full-init'))
 }
+Remove-Variable starship
 
 # oh-my-posh
 # link: https://ohmyposh.dev/

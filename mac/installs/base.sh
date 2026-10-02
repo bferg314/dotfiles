@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Base installation script for macOS
 # Installs core development tools and utilities
+#
+# What Homebrew installs is listed in mac/Brewfile; this script installs
+# Homebrew itself, runs `brew bundle`, and handles the few things that do not
+# come from Homebrew (Command Line Tools, the font, gum, rustup, mise's tools).
 
 set -e  # Exit on error
 
@@ -8,244 +12,118 @@ set -e  # Exit on error
 # other installers rather than redeclared here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
+# setup.sh exports REPO_ROOT; work it out when this is run on its own.
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# shellcheck source=lib/shared.sh
+. "$REPO_ROOT/lib/shared.sh"
+
 echo -e "${BOLD}${CYAN}=== Base Tools Installation (macOS) ===${NC}"
 echo
 
-# Check if Homebrew is installed
-if ! command -v brew >/dev/null 2>&1; then
-    echo -e "${YELLOW}Homebrew not found. Installing Homebrew...${NC}"
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-    # Add Homebrew to PATH for Apple Silicon Macs
-    if [[ $(uname -m) == 'arm64' ]]; then
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    fi
-    echo -e "${GREEN}✓ Homebrew installed${NC}"
-else
-    echo -e "${GREEN}✓ Homebrew already installed${NC}"
+# 1. Xcode Command Line Tools -- git, cc and make, which Homebrew and the Rust
+# toolchain both need. The installer is a GUI dialog, so this stops and asks
+# for a re-run rather than waiting on it.
+step "Checking Xcode Command Line Tools..."
+if ! xcode-select -p >/dev/null 2>&1; then
+    step "Installing Xcode Command Line Tools..."
+    xcode-select --install
+    warn "Finish the Command Line Tools install in the dialog, then run this script again."
+    exit 0
 fi
+ok "Xcode Command Line Tools already installed"
 echo
 
-# Update Homebrew
-echo -e "${YELLOW}Updating Homebrew...${NC}"
+# 2. Homebrew
+ensure_brew || die "Homebrew is required for the rest of this script."
+
+# Put brew on PATH for new login shells on Apple Silicon, where it lives in
+# /opt/homebrew. Intel Macs use /usr/local, which is already on PATH.
+if [ "$(uname -m)" = "arm64" ] && ! grep -qs 'brew shellenv' "$HOME/.zprofile"; then
+    # shellcheck disable=SC2016  # written literally into .zprofile
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+    ok "Added Homebrew to ~/.zprofile"
+fi
+
+step "Updating Homebrew..."
 brew update
 echo
 
-# 1. Install Vim with clipboard support
-echo -e "${YELLOW}Installing vim...${NC}"
-if ! brew list vim &>/dev/null; then
-    brew install vim
-    echo -e "${GREEN}✓ Vim installed${NC}"
+# 3. Everything in the Brewfile. `brew bundle` keeps going past a formula that
+# fails and reports it at the end, so one bad formula does not stop the rest;
+# a failure here is a warning, not fatal, for the same reason.
+step "Installing packages from mac/Brewfile..."
+if brew bundle --file="$REPO_ROOT/mac/Brewfile"; then
+    ok "Brewfile packages installed"
 else
-    echo -e "${GREEN}✓ Vim already installed${NC}"
+    warn "Some Brewfile packages failed; 'brew bundle check --verbose --file=mac/Brewfile' shows which"
 fi
 echo
 
-# 2. Install Docker Desktop for Mac
-echo -e "${YELLOW}Installing Docker Desktop...${NC}"
-if ! brew list --cask docker &>/dev/null; then
-    brew install --cask docker
-    echo -e "${GREEN}✓ Docker Desktop installed${NC}"
-    echo -e "${YELLOW}  NOTE: You need to open Docker Desktop from Applications to complete setup${NC}"
-else
-    echo -e "${GREEN}✓ Docker Desktop already installed${NC}"
-fi
-echo
-
-# 3. Install zellij
-echo -e "${YELLOW}Installing zellij...${NC}"
-brew install zellij
-echo -e "${GREEN}✓ zellij installed${NC}"
-echo
-
-# 3a. Install gum, which draws the setup menu's checklist.
+# 4. gum, which draws the setup menu's checklist. Pinned release binary, not
+# the Homebrew formula -- see ensure_gum in common.sh for why.
 # set -e is active, and the menu works without it, so a failure only warns.
 ensure_gum || warn "Continuing without gum; the setup menu will use its numbered fallback."
 echo
 
-# 3b. Install the terminal font
-#
-# Homebrew has font-fira-code-nerd-font, but this pulls the same GitHub release
-# that the Linux and Windows installers use so every machine ends up on an
-# identical version. Only the Mono variant is installed; the archive also
-# carries the proportional and non-Mono families.
-echo -e "${YELLOW}Installing FiraCode Nerd Font Mono...${NC}"
-FONT_DIR="$HOME/Library/Fonts"
-if ls "$FONT_DIR"/FiraCodeNerdFontMono-*.ttf >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ FiraCode Nerd Font Mono already installed${NC}"
-else
-    FONT_TAG="$(curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest |
-        grep '"tag_name"' | head -n1 | cut -d'"' -f4)"
-    if [ -z "$FONT_TAG" ]; then
-        echo -e "${YELLOW}⚠ Could not determine the latest nerd-fonts release; skipping font${NC}"
-    else
-        FONT_TMP="$(mktemp -d)"
-        if curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_TAG}/FiraCode.tar.xz" |
-                tar -xJ -C "$FONT_TMP"; then
-            mkdir -p "$FONT_DIR"
-            cp "$FONT_TMP"/FiraCodeNerdFontMono-*.ttf "$FONT_DIR/"
-            echo -e "${GREEN}✓ FiraCode Nerd Font Mono installed (${FONT_TAG})${NC}"
-        else
-            echo -e "${YELLOW}⚠ Failed to download the font; prompt glyphs will not render${NC}"
-        fi
-        rm -rf "$FONT_TMP"
-    fi
-fi
+# 5. The terminal font. Homebrew has font-fira-code-nerd-font, but this pulls
+# the same GitHub release the Linux and Windows installers use, checksum
+# included, so every machine ends up on an identical version.
+install_nerd_font FiraCode 'FiraCodeNerdFontMono-*.ttf' 'FiraCode Nerd Font Mono' ||
+    warn "Continuing without the font; prompt glyphs will not render."
 echo
 
-# 4. Install Python and pip
-#
-# Pinned to the series this repo targets rather than brew's rolling `python3`,
-# so macOS, Linux and Windows stay on the same one. The fallback matters when
-# Homebrew has not yet published the formula.
-PYTHON_SERIES="3.14"
-echo -e "${YELLOW}Installing Python ${PYTHON_SERIES}...${NC}"
-if brew install "python@${PYTHON_SERIES}"; then
-    echo -e "${GREEN}✓ Python ${PYTHON_SERIES} installed${NC}"
-    # Keg-only formulae are not linked into the prefix; python3 keeps pointing
-    # at whatever else is installed until the versioned bin dir is on PATH.
-    PYTHON_PREFIX="$(brew --prefix "python@${PYTHON_SERIES}" 2>/dev/null)"
-    if [ -n "$PYTHON_PREFIX" ] && [ -d "$PYTHON_PREFIX/libexec/bin" ]; then
-        echo -e "${BLUE}  → For an unversioned python3/pip3, put this on PATH:${NC}"
-        echo -e "    ${BOLD}${PYTHON_PREFIX}/libexec/bin${NC}"
-    fi
-else
-    echo -e "${YELLOW}⚠ No python@${PYTHON_SERIES} formula; falling back to python3${NC}"
-    brew install python3
-    echo -e "${GREEN}✓ Python $(python3 --version 2>&1 | awk '{print $2}') installed${NC}"
-fi
-echo
-
-# 5. Install Node Version Manager (nvm) and LTS Node
-echo -e "${YELLOW}Installing Node Version Manager (nvm)...${NC}"
-if [ ! -d "$HOME/.nvm" ]; then
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-
-    # Load nvm for current session
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    # Install LTS version of Node
-    echo -e "${YELLOW}Installing Node.js LTS...${NC}"
-    nvm install --lts
-    nvm use --lts
-    echo -e "${GREEN}✓ nvm and Node.js LTS installed${NC}"
-else
-    echo -e "${GREEN}✓ nvm already installed${NC}"
-    # Load nvm and install/update LTS
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    echo -e "${YELLOW}Installing/updating Node.js LTS...${NC}"
-    nvm install --lts
-    nvm use --lts
-    echo -e "${GREEN}✓ Node.js LTS updated${NC}"
-fi
-echo
-
-# 6. Install Command Line Developer Tools
-echo -e "${YELLOW}Checking Xcode Command Line Tools...${NC}"
-if ! xcode-select -p &>/dev/null; then
-    echo -e "${YELLOW}Installing Xcode Command Line Tools...${NC}"
-    xcode-select --install
-    echo -e "${YELLOW}Please complete the Xcode Command Line Tools installation and run this script again.${NC}"
-    exit 0
-else
-    echo -e "${GREEN}✓ Xcode Command Line Tools already installed${NC}"
-fi
-echo
-
-# 6b. Install the Rust toolchain
-#
-# After the Command Line Tools above: the default toolchain links with cc.
-# The upstream installer rather than Homebrew's rustup formula, so macOS, Linux
-# and Windows all manage toolchains the same way.
+# 6. Rust, through upstream rustup so macOS, Linux and Windows all manage
+# toolchains the same way.
 #
 # --no-modify-path, because rustup would otherwise append its own PATH line to
-# ~/.zshenv, ~/.bashrc and ~/.profile. zshrc.d/rust.zshrc does that instead, so
-# the shell config stays in the repo.
-echo -e "${YELLOW}Installing rustup...${NC}"
+# ~/.zshenv, ~/.bashrc and ~/.profile. shared/shell/rust.sh does that instead,
+# so the shell config stays in the repo.
+step "Installing rustup..."
 # An `if` rather than `[ -f ... ] && ...`: under set -e a failing test as the
 # last command of an AND-list takes the whole script down with it.
-if [ -f "$HOME/.cargo/env" ]; then \. "$HOME/.cargo/env"; fi
+# shellcheck disable=SC1091
+if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
 if command -v rustup >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ rustup already installed ($(rustup --version 2>/dev/null | head -n1))${NC}"
-    rustup update || echo -e "${YELLOW}⚠ rustup update failed; the existing toolchain is unchanged${NC}"
+    ok "rustup already installed ($(rustup --version 2>/dev/null | head -n1))"
+    rustup update || warn "rustup update failed; the existing toolchain is unchanged"
 else
     if curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
             sh -s -- -y --no-modify-path --default-toolchain stable; then
-        if [ -f "$HOME/.cargo/env" ]; then \. "$HOME/.cargo/env"; fi
-        echo -e "${GREEN}✓ rustup installed ($(rustup --version 2>/dev/null | head -n1))${NC}"
+        # shellcheck disable=SC1091
+        if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
+        ok "rustup installed ($(rustup --version 2>/dev/null | head -n1))"
     else
-        echo -e "${YELLOW}⚠ rustup install failed; continuing without Rust (see https://rustup.rs)${NC}"
+        warn "rustup install failed; continuing without Rust (see https://rustup.rs)"
     fi
 fi
 echo
 
-# 6c. Install the Go toolchain
-#
-# Upstream tarball rather than Homebrew's go formula, the same reasoning as
-# rustup above: one source keeps macOS, Linux and Windows on the same version.
-# Installed to /usr/local/go, the layout upstream's own tarball assumes;
-# zshrc.d/go.zshrc puts /usr/local/go/bin and $HOME/go/bin on PATH.
-echo -e "${YELLOW}Installing Go...${NC}"
-GO_ARCH="$(uname -m)"
-[ "$GO_ARCH" = "x86_64" ] && GO_ARCH="amd64"
-GO_VERSION="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)"
-if [ -z "$GO_VERSION" ]; then
-    echo -e "${YELLOW}⚠ Could not determine the latest Go release; skipping Go${NC}"
-elif [ -x /usr/local/go/bin/go ] && [ "$(/usr/local/go/bin/go version | awk '{print $3}')" = "$GO_VERSION" ]; then
-    echo -e "${GREEN}✓ Go already installed ($GO_VERSION)${NC}"
-else
-    GO_TMP="$(mktemp -d)"
-    if curl -fsSL "https://go.dev/dl/${GO_VERSION}.darwin-${GO_ARCH}.tar.gz" | tar -xz -C "$GO_TMP"; then
-        sudo rm -rf /usr/local/go
-        sudo mv "$GO_TMP/go" /usr/local/go
-        echo -e "${GREEN}✓ Go installed ($(/usr/local/go/bin/go version | awk '{print $3}'))${NC}"
-    else
-        echo -e "${YELLOW}⚠ Failed to download or extract Go; continuing without it${NC}"
-    fi
-    rm -rf "$GO_TMP"
-fi
+# 7. mise's tools: node, python, go, uv and ruff, pinned in
+# shared/mise/config.toml. mise itself came from the Brewfile. Replaces the
+# old nvm, python@3.14 formula and /usr/local/go installs.
+mise_install_tools || warn "Re-run 'mise install' in a new shell to finish."
+# Go tools that only ship as source (folgit, ...), through gup -- see
+# shared/gup/README.md. Needs mise's go, so it comes after the line above.
+go_tools_install || true
 echo
 
-# 7. Install and configure Git
-echo -e "${YELLOW}Installing git...${NC}"
-brew install git
-echo -e "${GREEN}✓ Git installed${NC}"
-echo
-
-# Configure git if not already configured
+# 8. Git identity, if it is not set yet
 if [ -z "$(git config --global user.name)" ]; then
-    read -p "$(echo -e ${CYAN}Enter your Git name: ${NC})" git_name
-    git config --global user.name "$git_name"
+    read -r -p "$(echo -e "${CYAN}Enter your Git name: ${NC}")" git_name
+    [ -n "$git_name" ] && git config --global user.name "$git_name"
 fi
 
 if [ -z "$(git config --global user.email)" ]; then
-    read -p "$(echo -e ${CYAN}Enter your Git email: ${NC})" git_email
-    git config --global user.email "$git_email"
+    read -r -p "$(echo -e "${CYAN}Enter your Git email: ${NC}")" git_email
+    [ -n "$git_email" ] && git config --global user.email "$git_email"
 fi
 
 echo -e "${BLUE}Git configured with:${NC}"
 echo -e "  ${BOLD}Name:${NC} $(git config --global user.name)"
 echo -e "  ${BOLD}Email:${NC} $(git config --global user.email)"
-echo
 
-# 8. Install GitHub CLI
-echo -e "${YELLOW}Installing GitHub CLI...${NC}"
-brew install gh
-echo -e "${GREEN}✓ GitHub CLI installed${NC}"
-echo
-
-# 9. Install yazi (TUI file manager) with its preview and navigation extras.
-# brew_install is per-formula and best-effort (see common.sh), so yazi itself
-# installing is unaffected by any one extra formula failing.
-echo -e "${YELLOW}Installing yazi...${NC}"
-brew_install yazi
-echo
-
-echo -e "${YELLOW}Installing yazi preview/navigation extras...${NC}"
-brew_install ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide resvg imagemagick
+# delta came from the Brewfile; now that it exists, make it git's pager.
+dot_git_delta_include || true
 echo
 
 echo -e "${BOLD}${GREEN}=== Base Tools Installation Complete ===${NC}"
@@ -253,6 +131,6 @@ echo
 echo -e "${YELLOW}IMPORTANT: If Docker Desktop was just installed, open it from Applications"
 echo -e "to complete the setup and grant necessary permissions.${NC}"
 echo
+echo -e "${BLUE}Open a new shell to pick up mise, starship, zoxide, fzf and atuin.${NC}"
 echo -e "${BLUE}Authenticate the GitHub CLI when you are ready: ${BOLD}gh auth login${NC}"
-echo -e "${BLUE}cargo and rustc land on PATH in a new shell (zshrc.d/rust.zshrc): ${BOLD}rustup show${NC}"
-echo -e "${BLUE}go lands on PATH in a new shell (zshrc.d/go.zshrc): ${BOLD}go version${NC}"
+echo -e "${BLUE}Check what mise manages: ${BOLD}mise ls${NC}${BLUE}   Rust: ${BOLD}rustup show${NC}"

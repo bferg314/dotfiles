@@ -1,0 +1,56 @@
+# mise global config -- linked to ~/.config/mise/config.toml on every platform
+# (%USERPROFILE%\.config\mise\config.toml on Windows).
+#
+# The rule this repo follows:
+#   * mise owns language runtimes and language tooling, on every OS, so a
+#     version pinned here is the version you get everywhere.
+#   * The OS package manager (winget, Homebrew, apt/dnf/pacman) owns apps and
+#     system tools.
+#   * Linux is the one exception: distros package the newer CLI tools late or
+#     not at all, so the `os = ["linux"]` block below fills that gap from
+#     upstream release binaries, which mise checksum-verifies. macOS gets the
+#     same tools from the Brewfile, Windows from windows/packages.psd1.
+#   * Rust stays on rustup, which mise itself recommends.
+#
+# A project can override any of these with its own mise.toml (`mise use
+# node@22` in the project directory writes one). After editing this file run
+# `mise install`, or `mise upgrade` to move "latest"/"lts" entries forward.
+
+[tools]
+# Runtimes
+node = "lts"
+python = "3.14"
+go = "latest"
+
+# Python tooling: uv manages projects and virtualenvs, ruff lints and formats.
+uv = "latest"
+ruff = "latest"
+
+# Go tooling: gup installs and updates the binaries in ~/go/bin -- the
+# `go install` tools listed in shared/gup/gup.json (folgit, ...).
+gup = "latest"
+
+# Linux only -- see the note at the top.
+starship = { version = "latest", os = ["linux"] }
+zoxide   = { version = "latest", os = ["linux"] }
+fzf      = { version = "latest", os = ["linux"] }
+eza      = { version = "latest", os = ["linux"] }
+bat      = { version = "latest", os = ["linux"] }
+delta    = { version = "latest", os = ["linux"] }
+lazygit  = { version = "latest", os = ["linux"] }
+atuin    = { version = "latest", os = ["linux"] }
+
+[settings]
+# Install a missing tool the first time a pinned version is needed, rather than
+# erroring with "not installed" -- e.g. after cloning a project whose mise.toml
+# pins a different node.
+auto_install = true
+# Pre-built CPython from python-build-standalone instead of compiling from
+# source: no build dependencies, and the same binaries on all three platforms.
+python.compile = false
+# Leave GOBIN unset, so `go install` puts binaries in ~/go/bin (Go's own
+# default) rather than in mise's per-version directory. Otherwise every Go
+# upgrade would orphan the tools installed with the previous version, and gup
+# would be managing a directory that keeps moving. shared/shell/go.sh and
+# windows/posh.d/tools.ps1 put ~/go/bin on PATH.
+go.set_gobin = false
