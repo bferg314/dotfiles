@@ -266,8 +266,24 @@ install_mise() {
         ok "mise already installed ($("$mise" --version 2>/dev/null | awk '{print $1}'))"
         "$mise" self-update --yes >/dev/null 2>&1 || true
     else
-        curl -fsSL https://mise.run | MISE_QUIET=1 sh || { warn "mise install failed"; return 1; }
-        [ -x "$mise" ] || { warn "mise is not at $mise after install"; return 1; }
+        # Retried, because everything after this depends on it: one reset
+        # connection while the installer fetches mise's release index would
+        # otherwise leave the whole toolchain uninstalled. That failure happens
+        # inside the installer's own download, so curl's --retry cannot help.
+        #
+        # The installer is downloaded first rather than piped: in `curl | sh`
+        # the status is sh's, and sh runs an empty script happily when curl
+        # fails. Success is judged by the binary actually being there.
+        local attempt script
+        for attempt in 1 2 3; do
+            if script="$(curl -fsSL https://mise.run)" &&
+                printf '%s\n' "$script" | MISE_QUIET=1 sh && [ -x "$mise" ]; then
+                break
+            fi
+            [ "$attempt" = 3 ] && { warn "mise install failed after 3 attempts"; return 1; }
+            warn "mise install failed (attempt $attempt of 3); retrying in $((attempt * 5))s"
+            sleep $((attempt * 5))
+        done
         ok "mise installed ($("$mise" --version 2>/dev/null | awk '{print $1}'))"
     fi
 

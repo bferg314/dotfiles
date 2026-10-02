@@ -90,8 +90,13 @@ if [ "$WITH_TOOLS" = 1 ]; then
     else
         fail "mise_install_tools failed" "$(tail -15 /tmp/tools.log)"
     fi
-    missing="$(mise_tools_missing)"
-    [ -z "$missing" ] && pass "mise reports nothing missing" || fail "mise reports missing: $missing"
+    # mise_tools_missing returns 1 with no output when mise itself is absent,
+    # which an output check alone would read as "nothing missing".
+    if missing="$(mise_tools_missing)"; then
+        [ -z "$missing" ] && pass "mise reports nothing missing" || fail "mise reports missing: $missing"
+    else
+        fail "mise is not installed"
+    fi
     if go_tools_install >>/tmp/tools.log 2>&1; then
         pass "gup installed the Go tools from shared/gup/gup.json"
     else
