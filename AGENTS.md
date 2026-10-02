@@ -85,6 +85,10 @@ A new tool usually also needs: a shell integration in `shared/shell/tools.sh` **
   "fix" a working copy that shows CRLF warnings on Windows.
 - **git config:** shared settings are `[include]`d at the **top** of `~/.gitconfig` so the
   user's own settings win. Never append includes with `git config --add include.path`.
+- **Never symlink git's global ignore file on Windows.** A dangling one makes every git command
+  fatal there, and it dangles whenever this checkout lacks the file. Windows writes a copy
+  (`Write-GitIgnore`). If you hit `cannot use ... as an exclude file`, run
+  `git -c core.excludesFile= <command>` to get unstuck.
 - **mise:** `go.set_gobin = false` must stay, or `go install` tools vanish on Go upgrades.
 
 ## Conventions in the scripts
