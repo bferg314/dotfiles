@@ -1,0 +1,21 @@
+# delta as git's pager. Included from ~/.gitconfig by Link dotfiles (and by
+# Base tools, right after it installs delta) only when delta is on PATH --
+# git does not fall back to `less` when core.pager is missing, it just fails.
+
+[core]
+    pager = delta
+
+[interactive]
+    # `git add -p` shows delta-coloured hunks.
+    diffFilter = delta --color-only
+
+[delta]
+    # n / N jump between files in a long diff.
+    navigate = true
+    line-numbers = true
+    # Follows the terminal's light or dark background.
+    detect-dark-light = auto
+    # Side-by-side is `git -c delta.side-by-side=true diff`, or `dsbs` below.
+
+[alias]
+    dsbs = -c delta.side-by-side=true diff

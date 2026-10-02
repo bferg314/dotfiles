@@ -1,0 +1,25 @@
+// Zellij configuration, shared by every platform.
+//
+// No default_shell here: on Linux and macOS zellij starts $SHELL, which is
+// already the right answer (bash on Linux, zsh on macOS). Windows is the
+// exception -- with no default_shell zellij falls back to cmd.exe even when
+// launched from PowerShell (zellij-org/zellij#4897) -- so windows/setup.ps1
+// writes this file to %APPDATA%\Zellij\config with `default_shell "pwsh"`
+// appended, rather than linking it. Edit this file, then re-run Link dotfiles
+// on Windows to pick the change up there.
+
+// UI options
+ui {
+    pane_frames {
+        rounded_corners true
+    }
+}
+
+// Theme
+theme "default"
+
+// Scroll buffer size
+scroll_buffer_size 10000
+
+// Copy on select
+copy_on_select true

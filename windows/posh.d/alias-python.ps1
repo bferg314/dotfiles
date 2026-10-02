@@ -1,49 +1,49 @@
-# Virtual environment functions
-function New-VirtualEnv { python -m venv .venv }
+# Python workflow -- the counterpart to shared/shell/python.sh.
+#
+# uv manages projects, virtualenvs and Python itself; ruff lints and formats.
+# Both come from mise (shared/mise/config.toml), which also provides the
+# `python` on PATH through its shims (see tools.ps1). Functions rather than
+# Set-Alias values wherever arguments are involved: a PowerShell alias cannot
+# carry any.
+
+# Virtual environments. uv creates .venv in the current directory; `uv run`
+# and `uv sync` use it automatically, so activating is only needed for an
+# interactive session in it.
+function New-VirtualEnv { uv venv @args }
 Set-Alias -Name cvenv -Value New-VirtualEnv
 
-function Activate-Venv {
-    .\.venv\Scripts\Activate
-}
-Set-Alias -Name avenv -Value Activate-Venv
+function Enable-Venv { & .\.venv\Scripts\Activate.ps1 }
+Set-Alias -Name avenv -Value Enable-Venv
 
-function Deactivate-Venv { deactivate }
-Set-Alias -Name dvenv -Value Deactivate-Venv
+function Disable-Venv { deactivate }
+Set-Alias -Name dvenv -Value Disable-Venv
 
-# Common Python commands
-function Start-DjangoServer { python manage.py runserver }
+# Projects (pyproject.toml + uv.lock)
+function uvi  { uv init @args }          # new project in the current directory
+function uva  { uv add @args }           # add a dependency:      uva requests
+function uvad { uv add --dev @args }     # add a dev dependency:  uvad pytest
+function uvs  { uv sync @args }          # install exactly what the lockfile says
+function uvr  { uv run @args }           # run in the project env: uvr python app.py
+
+# requirements.txt projects that have not moved to pyproject.toml yet
+function pipi { uv pip install -r requirements.txt @args }
+function pipf { uv pip freeze | Set-Content -Path requirements.txt -Encoding utf8 }
+
+# Common commands
+function Start-DjangoServer { uv run python manage.py runserver @args }
 Set-Alias -Name pr -Value Start-DjangoServer
 
-function Start-PyTest { python -m pytest $args }
+function Start-PyTest { uv run pytest @args }
 Set-Alias -Name pt -Value Start-PyTest
 
-function Update-PipPackages { 
-    pip list --outdated --format=freeze | 
-    Where-Object { $_ -notmatch '^\-e' } | 
-    ForEach-Object { $_.split('==')[0] } | 
-    ForEach-Object { pip install -U $_ }
-}
-Set-Alias -Name pipup -Value Update-PipPackages
+# Code quality: ruff replaces pylint, black and isort
+function lint  { ruff check @args }
+function lintf { ruff check --fix @args }
+function fmt   { ruff format @args }
 
-function Export-Requirements { pip freeze > requirements.txt }
-Set-Alias -Name pipf -Value Export-Requirements
-
-function Install-Requirements { pip install -r requirements.txt }
-Set-Alias -Name pipi -Value Install-Requirements
-
-# IPython/Jupyter aliases
-Set-Alias -Name ipy -Value ipython
-
-function Start-JupyterNotebook { jupyter notebook $args }
-Set-Alias -Name jn -Value Start-JupyterNotebook
-
-function Start-JupyterLab { jupyter lab $args }
-Set-Alias -Name jl -Value Start-JupyterLab
-
-# Code quality and formatting
-Set-Alias -Name lint -Value pylint
-function Invoke-Black { python -m black $args }
-Set-Alias -Name black -Value Invoke-Black
-
-function Invoke-ISort { python -m isort $args }
-Set-Alias -Name isort -Value Invoke-ISort
+# IPython/Jupyter, layered on top of the current project's environment with
+# --with, so they can import the project's packages without being added to
+# its dependencies. Outside a project they run in a throwaway environment.
+function jn  { uv run --with jupyter jupyter notebook @args }
+function jl  { uv run --with jupyter jupyter lab @args }
+function ipy { uv run --with ipython ipython @args }

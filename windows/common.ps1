@@ -425,14 +425,258 @@ function Get-NormalisedFileHash {
     }
 }
 
+# A GitHub token, if one can be found without prompting: $env:GH_TOKEN or
+# $env:GITHUB_TOKEN, else the gh CLI's own login. Unauthenticated API calls are
+# limited to 60 an hour per IP; authenticated ones get 5,000. The counterpart
+# to github_token in lib/download.sh.
+function Get-GitHubToken {
+    if ($env:GH_TOKEN) { return $env:GH_TOKEN }
+    if ($env:GITHUB_TOKEN) { return $env:GITHUB_TOKEN }
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $token = gh auth token 2>$null
+            if ($LASTEXITCODE -eq 0 -and $token) { return "$token".Trim() }
+        } finally {
+            $ErrorActionPreference = $previous
+        }
+    }
+    return $null
+}
+
 # Latest release tag for a GitHub repo, e.g. Get-GitHubLatestTag zellij-org/zellij
 function Get-GitHubLatestTag {
     param([Parameter(Mandatory)][string]$Repo)
+    $headers = @{ Accept = 'application/vnd.github+json' }
+    $token = Get-GitHubToken
+    if ($token) { $headers['Authorization'] = "Bearer $token" }
     try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" `
+                                     -Headers $headers -UseBasicParsing
         return $release.tag_name
     } catch {
         return $null
+    }
+}
+
+# ─── Checksums ────────────────────────────────────────────────────────────────
+
+# The checksum for <Name> from a `sha256sum`-style listing at <Uri> -- the
+# checksums.txt / SHA-256.txt files most projects publish next to their
+# release assets. $null when the listing or the entry is missing.
+function Get-ChecksumFromList {
+    param([Parameter(Mandatory)][string]$Uri, [Parameter(Mandatory)][string]$Name)
+    try {
+        $listing = (Invoke-WebRequest -Uri $Uri -UseBasicParsing).Content
+    } catch {
+        return $null
+    }
+    if ($listing -is [byte[]]) { $listing = [System.Text.Encoding]::UTF8.GetString($listing) }
+    return (ConvertFrom-ChecksumList -Text $listing -Name $Name)
+}
+
+# The parsing half of Get-ChecksumFromList. `<hash>  <name>` per line; a `*`
+# before the name marks binary mode in sha256sum output and is ignored.
+function ConvertFrom-ChecksumList {
+    param([AllowEmptyString()][string]$Text, [Parameter(Mandatory)][string]$Name)
+    foreach ($line in ($Text -split "`n")) {
+        $parts = $line.Trim() -split '\s+', 2
+        if ($parts.Count -eq 2 -and $parts[1].TrimStart('*') -eq $Name) { return $parts[0].ToLower() }
+    }
+    return $null
+}
+
+# True when <Path> hashes to <Expected>. A missing <Expected> -- a checksum that
+# could not be fetched -- is a failure, not a pass. The counterpart to
+# verify_sha256 in lib/download.sh.
+function Test-FileSha256 {
+    param([Parameter(Mandatory)][string]$Path, [string]$Expected)
+    $leaf = Split-Path $Path -Leaf
+    if (-not $Expected) {
+        Write-Fail "No published checksum found for $leaf; refusing to install it"
+        return $false
+    }
+    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $Expected.ToLower()) {
+        Write-Fail "Checksum mismatch for $leaf"
+        Write-Warn "expected $Expected"
+        Write-Warn "got      $actual"
+        return $false
+    }
+    Write-Info "sha256 verified: $leaf"
+    return $true
+}
+
+# ─── Git ──────────────────────────────────────────────────────────────────────
+
+# Forward slashes: git config treats a backslash as an escape character, and
+# git for Windows reads C:/Users/... paths fine.
+function ConvertTo-GitPath { param([string]$Path) return ($Path -replace '\\', '/') }
+
+function Test-GitInclude {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return $false }
+    $want = ConvertTo-GitPath $Path
+    $have = @(git config --global --get-all include.path 2>$null)
+    return [bool]($have | Where-Object { (ConvertTo-GitPath $_) -eq $want })
+}
+
+# Add `[include] path = <Path>` to ~/.gitconfig, once. The counterpart to
+# dot_git_include in lib/shared.sh: ~/.gitconfig keeps your identity and
+# anything machine-specific.
+#
+# The include goes at the TOP of the file, not the end. git applies config in
+# file order and the last value wins, so an include appended at the end (what
+# `git config --add include.path` does) would override every setting you had
+# already made in ~/.gitconfig. At the top, everything of yours comes after it
+# and wins.
+function Add-GitInclude {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Warn "git not installed; skipping the $(Split-Path $Path -Leaf) include"
+        return
+    }
+    if (Test-GitInclude -Path $Path) {
+        Write-Ok "~/.gitconfig already includes $(Split-Path $Path -Leaf)"
+        return
+    }
+
+    $config = if ($env:GIT_CONFIG_GLOBAL) { $env:GIT_CONFIG_GLOBAL } else { Join-Path $HOME '.gitconfig' }
+    $existing = if (Test-Path -LiteralPath $config) { [System.IO.File]::ReadAllText($config) } else { '' }
+    # git skips a BOM, but nothing else here writes one, so neither does this.
+    [System.IO.File]::WriteAllText($config, "[include]`n`tpath = $(ConvertTo-GitPath $Path)`n$existing",
+                                   (New-Object System.Text.UTF8Encoding $false))
+    Write-Ok "~/.gitconfig now includes $(Split-Path $Path -Leaf) (your own settings still win)"
+}
+
+# delta's pager settings only once delta exists: git fails outright when
+# core.pager is not on PATH.
+function Add-GitDeltaInclude {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    if (Get-Command delta -ErrorAction SilentlyContinue) {
+        Add-GitInclude -Path (Join-Path $RepoRoot 'shared\git\delta.gitconfig')
+    } else {
+        Write-Info "delta not installed yet; its git pager settings are added by Base tools"
+    }
+}
+
+# ─── mise ─────────────────────────────────────────────────────────────────────
+
+function Get-MiseShimsPath { return (Join-Path $env:LOCALAPPDATA 'mise\shims') }
+
+# Put <Entry> on the user PATH (persistently) and this session's PATH, once.
+# -Prepend puts it ahead of everything else, for entries that must win.
+function Add-UserPathEntry {
+    param([Parameter(Mandatory)][string]$Entry, [switch]$Prepend)
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (($userPath -split ';') -notcontains $Entry) {
+        $updated = if ($Prepend) { "$Entry;$userPath" } elseif ($userPath) { "$userPath;$Entry" } else { $Entry }
+        [Environment]::SetEnvironmentVariable('Path', $updated.TrimEnd(';'), 'User')
+        Write-Ok "Added $Entry to the user PATH"
+    }
+    if (($env:Path -split ';') -notcontains $Entry) {
+        $env:Path = if ($Prepend) { "$Entry;$env:Path" } else { "$env:Path;$Entry" }
+    }
+}
+
+# ─── Go tools (gup) ───────────────────────────────────────────────────────────
+
+# Where `go install` puts binaries. mise is configured not to set GOBIN
+# (go.set_gobin = false in shared/mise/config.toml), so this is Go's own
+# default unless you have set GOBIN or GOPATH yourself. The counterpart to
+# go_bin_dir in lib/shared.sh.
+function Get-GoBinPath {
+    if ($env:GOBIN) { return $env:GOBIN }
+    $gopath = if ($env:GOPATH) { ($env:GOPATH -split ';')[0] } else { Join-Path $HOME 'go' }
+    return (Join-Path $gopath 'bin')
+}
+
+# Binary names listed in shared/gup/gup.json.
+function Get-GoToolNames {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    $manifest = Join-Path $RepoRoot 'shared\gup\gup.json'
+    if (-not (Test-Path -LiteralPath $manifest)) { return @() }
+    return @((Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json).packages | ForEach-Object { $_.name })
+}
+
+# Names from gup.json that are not in the Go bin dir yet.
+function Get-MissingGoTools {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    $bin = Get-GoBinPath
+    return @(Get-GoToolNames -RepoRoot $RepoRoot |
+             Where-Object { -not (Test-Path -LiteralPath (Join-Path $bin "$_.exe")) })
+}
+
+# Install (or update to latest) every tool in shared/gup/gup.json with
+# `gup import`, and put the Go bin dir on PATH. Through `mise exec` so mise's
+# go and gup are found even in a session whose PATH predates the shims.
+function Install-GoTools {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    $mise = Get-Command mise -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $mise) {
+        Write-Fail "mise not found on PATH; skipping the Go tools"
+        return $false
+    }
+
+    Add-UserPathEntry -Entry (Get-GoBinPath)
+
+    Write-Step "Installing Go tools from shared/gup/gup.json (folgit, ...)..."
+    $manifest = Join-Path $RepoRoot 'shared\gup\gup.json'
+    # Start-Process, as in Install-MiseTools: output to the console, not into
+    # this function's return value. The path is quoted for Start-Process's
+    # single command line.
+    $proc = Start-Process -FilePath $mise.Source -NoNewWindow -Wait -PassThru `
+        -ArgumentList "exec -- gup import --file $(ConvertTo-NativeArg $manifest)"
+    if ($proc.ExitCode -ne 0) {
+        Write-Fail "Some Go tools failed to install; re-run 'gup import --file shared\gup\gup.json'"
+        return $false
+    }
+    Write-Ok "Go tools installed to $(Get-GoBinPath)"
+    return $true
+}
+
+# Install everything in ~/.config/mise/config.toml, and put mise's shims on the
+# user PATH ahead of anything else there, so node/python/go resolve to mise's
+# copies in every program -- not only in shells that load posh.d.
+function Install-MiseTools {
+    $mise = Get-Command mise -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $mise) {
+        Write-Fail "mise not found on PATH; open a new shell and run Base tools again"
+        return $false
+    }
+
+    $config = Join-Path $HOME '.config\mise\config.toml'
+    if (-not (Test-Path -LiteralPath $config)) {
+        Write-Warn "$config is not linked yet - run Link dotfiles, then Base tools again"
+        return $false
+    }
+
+    Add-UserPathEntry -Entry (Get-MiseShimsPath) -Prepend
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # The config was written by this repo, so it is trusted -- without this
+        # mise asks interactively the first time it sees the file.
+        & $mise.Source trust --quiet $config *> $null
+
+        Write-Step "Installing mise tools (node, python, go, uv, ruff)..."
+        # Start-Process for the same reasons as in Install-Package: mise's
+        # progress display redraws in place, and its output stays out of this
+        # function's return value.
+        $proc = Start-Process -FilePath $mise.Source -ArgumentList 'install --yes' -NoNewWindow -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Write-Fail "Some mise tools failed to install; re-run 'mise install' to retry"
+            return $false
+        }
+        & $mise.Source upgrade --yes *> $null
+        & $mise.Source reshim *> $null
+        Write-Ok "mise tools installed"
+        & $mise.Source ls --current | ForEach-Object { Write-Host "    $_" }
+        return $true
+    } finally {
+        $ErrorActionPreference = $previous
     }
 }
 
@@ -479,8 +723,11 @@ function Install-NerdFont {
 
     try {
         $zip = Join-Path $tmp "$Archive.zip"
-        Get-FileFromWeb -Uri "https://github.com/ryanoasis/nerd-fonts/releases/download/$tag/$Archive.zip" `
-                        -OutFile $zip
+        $release = "https://github.com/ryanoasis/nerd-fonts/releases/download/$tag"
+        Get-FileFromWeb -Uri "$release/$Archive.zip" -OutFile $zip
+        if (-not (Test-FileSha256 -Path $zip -Expected (Get-ChecksumFromList -Uri "$release/SHA-256.txt" -Name "$Archive.zip"))) {
+            return $false
+        }
 
         $extract = Join-Path $tmp 'extract'
         # Expand-Archive rather than a COM shell call: no UI, and it is present

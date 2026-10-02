@@ -1,0 +1,93 @@
+# Shared git settings, pulled into ~/.gitconfig by Link dotfiles with
+#
+#     [include]
+#         path = <repo>/shared/git/gitconfig
+#
+# rather than replacing ~/.gitconfig. Your name and email -- and anything
+# machine-specific, such as a work email or a credential helper -- stay in
+# ~/.gitconfig itself, and anything set there wins over this file because it
+# is read after the include.
+#
+# delta's pager settings live in delta.gitconfig next to this file, included
+# separately and only once delta is installed: a core.pager that is not on
+# PATH breaks `git log` and `git diff` outright.
+
+[init]
+    defaultBranch = master
+
+[core]
+    # Global ignores for editor and OS droppings, next to this file.
+    excludesFile = ~/.config/git/ignore
+    # core.autocrlf is deliberately not set: Git for Windows sets it to true
+    # system-wide, Linux and macOS leave it off, and both are right for their
+    # platform. Per-repo line endings belong in that repo's .gitattributes.
+
+[pull]
+    # `git pull` refuses to make a merge commit; rebase local work onto the
+    # remote instead. Use `git pull --no-rebase` for a one-off merge.
+    rebase = true
+
+[rebase]
+    # Stash uncommitted changes before a rebase and restore them after.
+    autoStash = true
+    # `fixup!` / `squash!` commits are moved into place by `git rebase -i`.
+    autoSquash = true
+    # Keep branches stacked on the one being rebased pointing at the right commits.
+    updateRefs = true
+
+[push]
+    # `git push` on a new branch creates the upstream of the same name.
+    autoSetupRemote = true
+    default = current
+
+[fetch]
+    # Drop remote-tracking branches that were deleted on the remote.
+    prune = true
+
+[merge]
+    # Conflict markers show the common ancestor too, not just both sides.
+    conflictStyle = zdiff3
+
+[diff]
+    # Better diffs for moved code and for code that was reindented.
+    algorithm = histogram
+    colorMoved = default
+    renames = copies
+
+[rerere]
+    # Remember how you resolved a conflict and reapply it next time.
+    enabled = true
+    autoUpdate = true
+
+[branch]
+    # `git branch` lists the most recently used branches first.
+    sort = -committerdate
+
+[tag]
+    sort = version:refname
+
+[column]
+    ui = auto
+
+[help]
+    # Mistyped commands ask before running the closest match.
+    autocorrect = prompt
+
+[commit]
+    # The commit message editor shows the diff being committed.
+    verbose = true
+
+[alias]
+    s    = status --short --branch
+    co   = checkout
+    sw   = switch
+    br   = branch
+    ci   = commit
+    amend = commit --amend --no-edit
+    unstage = restore --staged
+    undo = reset --soft HEAD~1
+    lg   = log --graph --pretty=format:'%C(yellow)%h%C(reset) %C(blue)%ad%C(reset) %s%C(auto)%d%C(reset) %C(dim)%an%C(reset)' --date=short
+    last = log -1 HEAD --stat
+    wip  = !git add -A && git commit -m wip --no-verify
+    # Branches whose upstream is gone (merged and deleted on the remote).
+    gone = !git fetch -p && git for-each-ref --format '%(refname:short) %(upstream:track)' refs/heads | awk '$2 == \"[gone]\" { print $1 }'

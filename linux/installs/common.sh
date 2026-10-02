@@ -5,6 +5,8 @@
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 
+# Used by the scripts that source this file, not by this file itself.
+# shellcheck disable=SC2034
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -18,6 +20,10 @@ ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}  ! $1${NC}"; }
 info() { echo -e "${BLUE}  → $1${NC}"; }
 die()  { echo -e "${RED}✗ $1${NC}" >&2; exit 1; }
+
+# GitHub API (with your token when one is available) and SHA-256 checks.
+# shellcheck source=lib/download.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/download.sh"
 
 # ─── Distribution detection ───────────────────────────────────────────────────
 
@@ -205,12 +211,6 @@ detect_arch() {
     esac
 }
 
-# Latest release tag for a GitHub repo, e.g. github_latest_tag zellij-org/zellij
-github_latest_tag() {
-    curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
-        grep '"tag_name"' | head -n1 | cut -d'"' -f4
-}
-
 # ─── Rust ─────────────────────────────────────────────────────────────────────
 
 # Install rustup from the upstream installer, and put cargo on PATH for the
@@ -249,50 +249,74 @@ install_rustup() {
     ok "rustup installed ($(rustup --version 2>/dev/null | head -n1))"
 }
 
-# ─── Go ───────────────────────────────────────────────────────────────────────
+# ─── mise ─────────────────────────────────────────────────────────────────────
 
-# Install Go from the upstream tarball to /usr/local/go, the same reasoning as
-# install_rustup above: Debian and the RHEL family both lag upstream Go by a
-# release or more, and one source means Linux, macOS and Windows all end up on
-# the same version.
+# Install mise to ~/.local/bin with its official installer, which picks the
+# right build for this machine and verifies its checksum before installing.
+# mise then installs node, python, go, uv, ruff and -- on Linux -- the CLI
+# tools distros do not package (see shared/mise/config.toml).
 #
-# bashrc.d/go.bashrc puts /usr/local/go/bin and $HOME/go/bin (GOPATH's default
-# bin dir) on PATH, so this does not touch shell config.
-install_go() {
-    local arch
-    arch="$(detect_arch)" || { warn "Unsupported architecture for the Go release: $(uname -m)"; return 1; }
-    [ "$arch" = "x86_64" ] && arch="amd64"
-    [ "$arch" = "aarch64" ] && arch="arm64"
+# Per-user rather than a distro package: only some distros carry mise, and the
+# per-user binary can update itself (`mise self-update`) without sudo.
+install_mise() {
+    local mise="$HOME/.local/bin/mise"
 
-    local version
-    version="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)"
-    [ -n "$version" ] || { warn "Could not determine the latest Go release"; return 1; }
-
-    if [ -x /usr/local/go/bin/go ]; then
-        local installed
-        installed="$(/usr/local/go/bin/go version | awk '{print $3}')"
-        if [ "$installed" = "$version" ]; then
-            ok "Go already installed ($version)"
-            return 0
-        fi
-        info "Replacing Go $installed with $version"
+    if [ -x "$mise" ] || command -v mise >/dev/null 2>&1; then
+        command -v mise >/dev/null 2>&1 && mise="$(command -v mise)"
+        ok "mise already installed ($("$mise" --version 2>/dev/null | awk '{print $1}'))"
+        "$mise" self-update --yes >/dev/null 2>&1 || true
+    else
+        curl -fsSL https://mise.run | MISE_QUIET=1 sh || { warn "mise install failed"; return 1; }
+        [ -x "$mise" ] || { warn "mise is not at $mise after install"; return 1; }
+        ok "mise installed ($("$mise" --version 2>/dev/null | awk '{print $1}'))"
     fi
 
-    local tmp
+    case ":$PATH:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) export PATH="$HOME/.local/bin:$PATH" ;;
+    esac
+}
+
+# ─── zellij ───────────────────────────────────────────────────────────────────
+
+# Install the latest zellij release binary to /usr/local/bin. Arch packages it;
+# nothing else does, so everyone else gets upstream's static musl build.
+#
+# zellij publishes the checksum of the extracted binary rather than of the
+# tarball, so the check runs after extraction and before install.
+install_zellij() {
+    if [ "$PKG_MANAGER" = "pacman" ]; then
+        pkg_install zellij
+        return
+    fi
+
+    local arch tag installed
+    arch="$(detect_arch)" || { warn "Unsupported architecture for the zellij binary release: $(uname -m)"; return 1; }
+    tag="$(github_latest_tag zellij-org/zellij)"
+    [ -n "$tag" ] || { warn "Could not determine the latest zellij release (GitHub API unreachable?)"; return 1; }
+
+    if command -v zellij >/dev/null 2>&1; then
+        installed="v$(zellij --version 2>/dev/null | awk '{print $2}')"
+        if [ "$installed" = "$tag" ]; then
+            ok "zellij already installed ($tag)"
+            return 0
+        fi
+    fi
+    info "Installing zellij ${tag} (${arch})"
+
+    local tmp base expected
     tmp="$(mktemp -d)"
     # Local trap: the caller's make_tmpdir trap must survive this function.
     trap 'rm -rf "$tmp"' RETURN
 
-    if ! curl -fsSL "https://go.dev/dl/${version}.linux-${arch}.tar.gz" | tar -xz -C "$tmp"; then
-        warn "Failed to download or extract ${version}"
-        return 1
-    fi
+    base="https://github.com/zellij-org/zellij/releases/download/${tag}/zellij-${arch}-unknown-linux-musl"
+    curl -fsSL "${base}.tar.gz" -o "$tmp/zellij.tar.gz" || { warn "Failed to download zellij ${tag}"; return 1; }
+    tar -xzf "$tmp/zellij.tar.gz" -C "$tmp" || { warn "Failed to extract zellij ${tag}"; return 1; }
+    expected="$(curl -fsSL "${base}.sha256sum" | awk '{print $1}')"
+    verify_sha256 "$tmp/zellij" "$expected" || return 1
 
-    sudo rm -rf /usr/local/go
-    sudo mv "$tmp/go" /usr/local/go
-
-    [ -x /usr/local/go/bin/go ] || { warn "go is not present at /usr/local/go/bin after install"; return 1; }
-    ok "Go installed ($(/usr/local/go/bin/go version | awk '{print $3}'))"
+    sudo install -m 755 "$tmp/zellij" /usr/local/bin/zellij
+    ok "zellij installed ($tag)"
 }
 
 # ─── gum ──────────────────────────────────────────────────────────────────────
@@ -339,11 +363,11 @@ ensure_gum() {
     # Local trap: the caller's make_tmpdir trap must survive this function.
     trap 'rm -rf "$tmp"' RETURN
 
-    if ! curl -fsSL "https://github.com/charmbracelet/gum/releases/download/${tag}/gum_${version}_Linux_${arch}.tar.gz" |
-            tar -xz -C "$tmp"; then
-        warn "Failed to download or extract gum ${tag}"
-        return 1
-    fi
+    local release="https://github.com/charmbracelet/gum/releases/download/${tag}"
+    local asset="gum_${version}_Linux_${arch}.tar.gz"
+    curl -fsSL "$release/$asset" -o "$tmp/$asset" || { warn "Failed to download gum ${tag}"; return 1; }
+    verify_sha256 "$tmp/$asset" "$(checksum_from_list "$release/checksums.txt" "$asset")" || return 1
+    tar -xzf "$tmp/$asset" -C "$tmp" || { warn "Failed to extract gum ${tag}"; return 1; }
 
     # Older releases put the binary at the archive root, newer ones inside a
     # versioned directory.
@@ -405,11 +429,11 @@ install_nerd_font() {
     # Local trap: the caller's make_tmpdir trap must survive this function.
     trap 'rm -rf "$tmp"' RETURN
 
-    if ! curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}/${archive}.tar.xz" |
-            tar -xJ -C "$tmp"; then
-        warn "Failed to download or extract ${archive}.tar.xz"
-        return 1
-    fi
+    local release="https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}"
+    curl -fsSL "$release/${archive}.tar.xz" -o "$tmp/${archive}.tar.xz" ||
+        { warn "Failed to download ${archive}.tar.xz"; return 1; }
+    verify_sha256 "$tmp/${archive}.tar.xz" "$(checksum_from_list "$release/SHA-256.txt" "${archive}.tar.xz")" || return 1
+    tar -xJf "$tmp/${archive}.tar.xz" -C "$tmp" || { warn "Failed to extract ${archive}.tar.xz"; return 1; }
 
     mkdir -p "$font_dir"
     # Only the requested variant: the archive also carries the proportional and

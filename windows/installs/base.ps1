@@ -2,20 +2,36 @@
 # Installs core development tools and utilities using winget
 # Requires Administrator privileges
 #
-# The counterpart to linux/installs/base.sh.
+# The counterpart to linux/installs/base.sh and mac/installs/base.sh. What
+# winget installs is listed in windows/packages.psd1; this script installs
+# those, then handles what does not come from winget (the font, the PSFzf
+# module, mise's runtimes, a few settings).
 
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\..\common.ps1"
+
+$REPO_ROOT = (Resolve-Path "$PSScriptRoot\..\..").Path
 
 Assert-Admin
 Write-Header "Base Tools Installation"
 Assert-Winget
 Reset-PackageFailures
 
-# ─── Git ──────────────────────────────────────────────────────────────────────
+# ─── Packages (windows/packages.psd1) ─────────────────────────────────────────
 
-Install-Package -Id 'Git.Git' -Name 'Git' | Out-Null
+$manifest = Import-PowerShellDataFile -Path (Join-Path $REPO_ROOT 'windows\packages.psd1')
+
+$group = $null
+foreach ($pkg in $manifest.Packages) {
+    if ($pkg.Group -ne $group) {
+        if ($group) { Write-Host "" }
+        $group = $pkg.Group
+    }
+    $extra = if ($pkg.ExtraArgs) { [string[]]$pkg.ExtraArgs } else { @() }
+    Install-Package -Id $pkg.Id -Name $pkg.Name -ExtraArgs $extra | Out-Null
+}
+Write-Host ""
 
 # winget's PATH changes do not reach the running process, so git may not be
 # callable yet on a first run. Pick it up from its known install location.
@@ -23,6 +39,8 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     $gitBin = "$env:ProgramFiles\Git\cmd"
     if (Test-Path -LiteralPath $gitBin) { $env:Path = "$env:Path;$gitBin" }
 }
+
+# ─── Git identity ─────────────────────────────────────────────────────────────
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
     # Matches the interactive identity prompt in linux/installs/base.sh, and is
@@ -40,42 +58,21 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     }
 
     Write-Info "Git identity: $(git config --global user.name) <$(git config --global user.email)>"
+
+    # delta was installed above; now that it exists, make it git's pager.
+    Add-GitDeltaInclude -RepoRoot $REPO_ROOT
 } else {
     Write-Warn "git is not on PATH yet - open a new shell to configure your identity."
 }
 Write-Host ""
 
-# ─── Core tooling ─────────────────────────────────────────────────────────────
-
-Install-Package -Id 'GitHub.cli'          -Name 'GitHub CLI'     | Out-Null
-Install-Package -Id 'vim.vim'             -Name 'Vim'            | Out-Null
-Install-Package -Id 'Python.Python.3.14'  -Name 'Python 3.14'    | Out-Null
-Install-Package -Id 'OpenJS.NodeJS.LTS'   -Name 'Node.js LTS'    | Out-Null
-Install-Package -Id 'Docker.DockerDesktop' -Name 'Docker Desktop' | Out-Null
-
-# A GUI over winget/scoop/chocolatey/pip/npm, for the packages that are easier
-# to browse for than to remember the id of.
+# ─── Terminal font ────────────────────────────────────────────────────────────
 #
-# Published as MartiCliment.UniGetUI (and WingetUI before that) until the
-# project moved to Devolutions - the old ids now resolve only to the
-# pre-release channel, so pin the current one.
-Install-Package -Id 'Devolutions.UniGetUI' -Name 'UniGetUI' | Out-Null
-Write-Host ""
-
-# ─── Prompt and terminal ──────────────────────────────────────────────────────
-#
-# windows/posh.d/zprompt.ps1 initialises starship on every shell start, so
-# without this the prompt errors on a fresh machine. The Nerd Font supplies the
-# glyphs that the starship and vim-airline configs both assume.
-#
-# No terminal emulator is installed here: this repo tracks no emulator config,
-# so whichever one you use (Windows Terminal ships with Windows 11) just needs
+# Not available through winget - see Install-NerdFont in common.ps1. The
+# starship prompt, eza's icons and vim-airline all assume it. No terminal
+# emulator is installed: Windows Terminal ships with Windows 11, and just needs
 # its font set to FiraCode Nerd Font Mono by hand.
 
-Install-Package -Id 'Starship.Starship'     -Name 'starship'   | Out-Null
-Install-Package -Id 'AutoHotkey.AutoHotkey' -Name 'AutoHotkey' | Out-Null
-
-# Not available through winget - see Install-NerdFont in common.ps1.
 if (-not (Install-NerdFont -Archive 'FiraCode' `
                            -FilePattern 'FiraCodeNerdFontMono-*.ttf' `
                            -Name 'FiraCode Nerd Font Mono')) {
@@ -83,88 +80,100 @@ if (-not (Install-NerdFont -Archive 'FiraCode' `
 }
 Write-Host ""
 
-# ─── Setup menu ───────────────────────────────────────────────────────────────
+# ─── PSFzf ────────────────────────────────────────────────────────────────────
 #
-# gum draws the checklist in setup.ps1. The menu falls back to a numbered list
-# without it, so this is a convenience rather than a requirement.
+# The PowerShell module behind the fzf key bindings in posh.d/tools.ps1
+# (Ctrl-R, Ctrl-T, Alt-C). Windows PowerShell 5.1 and PowerShell 7 keep
+# separate module folders, so it is installed for each edition present.
 
-Install-Package -Id 'charmbracelet.gum' -Name 'gum' | Out-Null
+function Install-PSFzfModule {
+    param([Parameter(Mandatory)][string]$Exe)
+    $script = @'
+$ErrorActionPreference = 'Stop'
+if (Get-Module -ListAvailable PSFzf) { 'PRESENT'; return }
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null
+}
+Install-Module PSFzf -Scope CurrentUser -Force -AllowClobber
+'INSTALLED'
+'@
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+    $previous = $ErrorActionPreference
+    $previousModulePath = $env:PSModulePath
+    $ErrorActionPreference = 'Continue'
+    try {
+        # A child inherits this process's PSModulePath, and PowerShell 7's
+        # entries break Windows PowerShell 5.1 (and vice versa): the child
+        # finds the other edition's PowerShellGet and Utility modules first.
+        # With the variable unset, each edition builds its own default.
+        Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
+        $result = & $Exe -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1 | Select-Object -Last 1
+    } finally {
+        $env:PSModulePath = $previousModulePath
+        $ErrorActionPreference = $previous
+    }
+    return "$result"
+}
+
+Write-Step "Installing the PSFzf PowerShell module..."
+$editions = @(
+    @{ Name = 'Windows PowerShell 5.1'; Exe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
+    @{ Name = 'PowerShell 7';           Exe = (Get-Command pwsh -ErrorAction SilentlyContinue).Source }
+)
+foreach ($edition in $editions) {
+    if (-not $edition.Exe -or -not (Test-Path -LiteralPath $edition.Exe)) { continue }
+    switch -Wildcard (Install-PSFzfModule -Exe $edition.Exe) {
+        'PRESENT'   { Write-Ok "PSFzf already installed ($($edition.Name))" }
+        'INSTALLED' { Write-Ok "PSFzf installed ($($edition.Name))" }
+        default {
+            Write-Fail "PSFzf failed for $($edition.Name): $_"
+            $global:DotfilesFailedPackages += "PSFzf ($($edition.Name))"
+        }
+    }
+}
 Write-Host ""
 
-# ─── Terminal multiplexer ─────────────────────────────────────────────────────
+# ─── mise runtimes ────────────────────────────────────────────────────────────
 #
-# The counterpart to the zellij section of linux/installs/base.sh. Upstream now
-# ships an official x86_64-pc-windows-msvc MSI, which winget packages, so unlike
-# the Linux side this needs no manual GitHub release fetch.
+# node, python, go, uv and ruff, pinned in shared/mise/config.toml. Replaces
+# the winget Python, Node.js LTS and Go packages earlier versions installed.
 
-Install-Package -Id 'Zellij.Zellij' -Name 'zellij' | Out-Null
+if (-not (Install-MiseTools)) {
+    $global:DotfilesFailedPackages += 'mise tools'
+}
 Write-Host ""
 
-# ─── Build tools ──────────────────────────────────────────────────────────────
+# ─── Go tools (gup) ───────────────────────────────────────────────────────────
 #
-# The build-essential equivalent. The C++ workload has to be requested through
-# --override, since the base package installs the shell only.
+# Go programs that only ship as source (folgit, ...), installed with
+# `gup import` from shared/gup/gup.json into %USERPROFILE%\go\bin. Needs
+# mise's go and gup, so it comes after the section above.
 
-Install-Package -Id 'Microsoft.VisualStudio.2022.BuildTools' -Name 'VS Build Tools' -ExtraArgs @(
-    '--override',
-    '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
-) | Out-Null
+if (-not (Install-GoTools -RepoRoot $REPO_ROOT)) {
+    $global:DotfilesFailedPackages += 'Go tools (gup)'
+}
 Write-Host ""
 
-# ─── Rust ─────────────────────────────────────────────────────────────────────
+# Packages mise now provides, still installed from before. Never removed
+# automatically: something else on the machine may depend on them.
+$superseded = @($manifest.Superseded | Where-Object { Test-PackageInstalled -Id $_.Id })
+if ($superseded.Count -gt 0) {
+    Write-Warn "Installed by an older version of this repo, and now provided by mise:"
+    foreach ($pkg in $superseded) {
+        Write-Info "$($pkg.Name) -> $($pkg.By).  Remove with: winget uninstall --id $($pkg.Id)"
+    }
+    Write-Host ""
+}
+
+# ─── yazi's `file` command ────────────────────────────────────────────────────
 #
-# rustup rather than a packaged rustc, so toolchains are managed the same way on
-# every platform. Installed after the build tools above on purpose: the default
-# x86_64-pc-windows-msvc toolchain needs the MSVC linker, and rustup only warns
-# about a missing one rather than failing.
-
-Install-Package -Id 'Rustlang.Rustup' -Name 'rustup' | Out-Null
-Write-Host ""
-
-# ─── Go ───────────────────────────────────────────────────────────────────────
-#
-# The upstream MSI rather than a Chocolatey/scoop package, the counterpart to
-# rustup above and install_go in linux/installs/common.sh: one source keeps
-# Windows, Linux and macOS on the same version. The MSI adds
-# C:\Program Files\Go\bin to the system PATH itself, so no shell config here.
-
-Install-Package -Id 'GoLang.Go' -Name 'Go' | Out-Null
-Write-Host ""
-
-# ─── Additional utilities ─────────────────────────────────────────────────────
-# curl is omitted: curl.exe ships with Windows 10 1803+.
-
-Install-Package -Id '7zip.7zip'            -Name '7-Zip' | Out-Null
-Install-Package -Id 'JernejSimoncic.Wget'  -Name 'wget'  | Out-Null
-Write-Host ""
-
-# ─── yazi (TUI file manager) ──────────────────────────────────────────────────
-#
-# Install-Package is per-package and best-effort (failures land in
-# $global:DotfilesFailedPackages and are reported at the end rather than
-# aborting), so yazi itself installing is unaffected by any one extra
-# package failing. 7-Zip is already installed above. resvg (SVG preview) has
-# no winget package yet, per yazi's own install docs.
-
-Install-Package -Id 'sxyazi.yazi' -Name 'yazi' | Out-Null
-Write-Host ""
-
-Install-Package -Id 'Gyan.FFmpeg'              -Name 'ffmpeg'      | Out-Null
-Install-Package -Id 'jqlang.jq'                -Name 'jq'          | Out-Null
-Install-Package -Id 'oschwartz10612.Poppler'   -Name 'poppler'     | Out-Null
-Install-Package -Id 'sharkdp.fd'               -Name 'fd'          | Out-Null
-Install-Package -Id 'BurntSushi.ripgrep.MSVC'  -Name 'ripgrep'     | Out-Null
-Install-Package -Id 'junegunn.fzf'             -Name 'fzf'         | Out-Null
-Install-Package -Id 'ajeetdsouza.zoxide'       -Name 'zoxide'      | Out-Null
-Install-Package -Id 'ImageMagick.ImageMagick'  -Name 'ImageMagick' | Out-Null
-Write-Host ""
-
 # Windows ships no `file` command, which yazi shells out to for MIME
 # detection -- without it, previews fall back to guessing by extension. Git
-# for Windows (installed above as Git.Git) bundles one at usr\bin\file.exe;
-# YAZI_FILE_ONE is the environment variable yazi's own docs say to point at
-# it. git.exe resolves to <GitRoot>\cmd or <GitRoot>\bin depending on how it
-# was found, so file.exe is one level further up either way.
+# for Windows bundles one at usr\bin\file.exe; YAZI_FILE_ONE is the environment
+# variable yazi's own docs say to point at it. git.exe resolves to
+# <GitRoot>\cmd or <GitRoot>\bin depending on how it was found, so file.exe is
+# one level further up either way.
 $gitCmd = Get-Command git -ErrorAction SilentlyContinue
 if ($gitCmd) {
     $gitRoot = Split-Path (Split-Path $gitCmd.Source -Parent) -Parent
@@ -186,11 +195,10 @@ Write-Header "Base Tools Installation Complete"
 $ok = Show-PackageFailures
 
 Write-Warn "Some installs need a restart to finish - Docker Desktop and VS Build Tools in particular."
+Write-Info "Open a new terminal to pick up mise's shims, zoxide, fzf key bindings and PATH changes."
 Write-Info "Authenticate the GitHub CLI when you are ready: gh auth login"
-Write-Info "cargo and rustc land on PATH in a new shell: rustup show"
-Write-Info "go lands on PATH in a new shell: go version"
+Write-Info "Check what mise manages: mise ls    Rust: rustup show"
 Write-Info "Set your terminal font to 'FiraCode Nerd Font Mono' so prompt glyphs render."
-Write-Info "Close and reopen your terminal for YAZI_FILE_ONE to take effect in yazi's previews."
 Write-Host ""
 
 if (-not $ok) { exit 1 }

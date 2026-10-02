@@ -1,6 +1,7 @@
+# shellcheck shell=bash
 # Rust toolchain (rustup)
 #
-# installs/base.sh runs rustup with --no-modify-path so it does not append its
+# The base installers run rustup with --no-modify-path so it does not append its
 # own block to ~/.bashrc, ~/.profile and ~/.zshenv. This is that block, kept in
 # the repo instead. Sourcing ~/.cargo/env rather than exporting PATH directly:
 # it is what rustup itself writes, and it skips the entry when it is already
