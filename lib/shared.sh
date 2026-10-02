@@ -213,13 +213,18 @@ mise_install_tools() {
     ok "mise tools installed"
     "$mise" ls --current 2>/dev/null | sed 's/^/    /'
 
-    # Seed atuin's database from the existing shell history, once.
+    # Seed atuin's database from the existing shell history, once. Best-effort:
+    # a machine with no history yet has nothing to import, and that must not
+    # make the whole install report failure.
     local atuin
     if atuin="$("$mise" which atuin 2>/dev/null)" || atuin="$(command -v atuin 2>/dev/null)"; then
         if [ ! -e "$HOME/.local/share/atuin/history.db" ]; then
-            "$atuin" import auto >/dev/null 2>&1 && ok "Imported shell history into atuin"
+            if "$atuin" import auto >/dev/null 2>&1; then
+                ok "Imported shell history into atuin"
+            fi
         fi
     fi
+    return 0
 }
 
 # ─── Go tools (gup) ───────────────────────────────────────────────────────────

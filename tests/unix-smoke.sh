@@ -149,9 +149,9 @@ if [ "$WITH_TOOLS" = 1 ]; then
     probe="$probe; type folgit 2>/dev/null | grep -q function || echo MISSING:folgit-shell-integration"
 fi
 
-# Job-control and line-editing notices are what a shell without a terminal
-# says about itself, not errors in the config.
-noise='no job control|cannot set terminal process group|can.t set tty pgrp|Inappropriate ioctl|line editing not enabled|cannot access the terminal'
+# Job-control, line-editing and zle notices are what a shell without a terminal
+# (a CI runner) says about itself, not errors in the config.
+noise='no job control|cannot set terminal process group|can.t set tty pgrp|can.t change option: zle|Inappropriate ioctl|line editing not enabled|cannot access the terminal'
 out="$("$SHELL_BIN" -i -c "$probe" 2>/tmp/shell.err)"
 errs="$(grep -Ev "$noise" /tmp/shell.err | grep -v '^$')"
 

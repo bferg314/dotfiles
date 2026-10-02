@@ -369,14 +369,28 @@ Test-Case 'bootstrap.ps1 never calls the DISM cmdlets directly' {
         "DISM cmdlets called outside the helper, which breaks under pwsh: $($offenders -join '; ')"
 }
 
-# Exercises the shipped function's PowerShell 7 branch. Off Windows there is no
-# powershell.exe to hand the work to, which is the guard being checked: it must
-# report that as a value, not throw.
+# Exercises the shipped function's PowerShell 7 branch: with no powershell.exe
+# to hand the work to, it must report that as a value, not throw.
+#
+# The missing powershell.exe is simulated by pointing SystemRoot (which the
+# helper builds the path from) at an empty folder. Relying on the real machine
+# instead made the result depend on where it ran: on an elevated machine with
+# OpenSSH present -- a CI runner -- it found powershell.exe and really queried
+# the capability.
 Test-Case 'the capability helper reports a missing Windows PowerShell rather than throwing' {
     if ($PSVersionTable.PSEdition -eq 'Desktop') {
         return  # the branch under test only exists on Core
     }
-    $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
+    $previous = $env:SystemRoot
+    $empty = Join-Path ([System.IO.Path]::GetTempPath()) "no-windows-$([System.IO.Path]::GetRandomFileName())"
+    New-Item -ItemType Directory -Path $empty -Force | Out-Null
+    try {
+        $env:SystemRoot = $empty
+        $result = Install-WindowsCapabilityByPattern -Pattern 'OpenSSH.Server*'
+    } finally {
+        $env:SystemRoot = $previous
+        Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue
+    }
     Assert-True ("$result" -like 'Failed:*') "expected a Failed: string, got '$result'"
 }
 
