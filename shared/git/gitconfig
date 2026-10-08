@@ -13,7 +13,7 @@
 # PATH breaks `git log` and `git diff` outright.
 
 [init]
-    defaultBranch = master
+    defaultBranch = main
 
 [core]
     # Global ignores for editor and OS droppings, next to this file.
@@ -21,6 +21,10 @@
     # core.autocrlf is deliberately not set: Git for Windows sets it to true
     # system-wide, Linux and macOS leave it off, and both are right for their
     # platform. Per-repo line endings belong in that repo's .gitattributes.
+
+    # Windows: allow paths over 260 characters (deep node_modules and the
+    # like). Other platforms ignore it.
+    longpaths = true
 
 [pull]
     # `git pull` refuses to make a merge commit; rebase local work onto the
