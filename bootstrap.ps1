@@ -3,7 +3,7 @@
 # generates an SSH key for GitHub, and sets up authorized_keys.
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/USER/dotfiles/master/bootstrap.ps1 | iex
+#   irm https://raw.githubusercontent.com/USER/dotfiles/main/bootstrap.ps1 | iex
 #
 # The counterpart to bootstrap.sh. Deliberately self-contained: it runs before
 # the repo exists, so it cannot dot-source windows/common.ps1 the way the rest

@@ -28,13 +28,13 @@ menu, its installers, and a few platform-specific snippets. It covers:
 Run this on any fresh Linux device — it will walk you through everything:
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/bferg314/dotfiles/main/bootstrap.sh)
 ```
 
 Or with curl:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/bferg314/dotfiles/main/bootstrap.sh)
 ```
 
 This will:
@@ -50,7 +50,7 @@ Run this in PowerShell on any fresh Windows device — it walks through the same
 bootstrap:
 
 ```powershell
-irm https://raw.githubusercontent.com/bferg314/dotfiles/master/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/bferg314/dotfiles/main/bootstrap.ps1 | iex
 ```
 
 This will:
@@ -103,7 +103,7 @@ than guesswork.
 
 ```
   Dotfiles Setup
-  arch · x86_64 · branch master
+  arch · x86_64 · branch main
 
   PRESETS
     [ ] Workstation preset
@@ -121,7 +121,7 @@ than guesswork.
     [ ] Network discovery (mDNS)   · avahi not running
 
   MAINTAIN
-    [ ] Update from git            ✓ up to date with origin/master
+    [ ] Update from git            ✓ up to date with origin/main
     [ ] Doctor (full report)
 ```
 
