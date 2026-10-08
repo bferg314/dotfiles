@@ -410,7 +410,22 @@ function Update-Dotfiles {
         return
     }
 
-    git -C $REPO_ROOT fetch origin
+    git -C $REPO_ROOT fetch --prune origin
+
+    # GitHub's master became main in October 2026. Clones made before that
+    # still have a local master whose origin/master is gone: follow the rename.
+    if ($branch -eq 'master') {
+        git -C $REPO_ROOT rev-parse -q --verify refs/remotes/origin/master *> $null
+        $hasMaster = $LASTEXITCODE -eq 0
+        git -C $REPO_ROOT rev-parse -q --verify refs/remotes/origin/main *> $null
+        if (-not $hasMaster -and $LASTEXITCODE -eq 0) {
+            git -C $REPO_ROOT branch -m master main
+            git -C $REPO_ROOT branch -u origin/main main *> $null
+            git -C $REPO_ROOT remote set-head origin main
+            $branch = 'main'
+            Write-Ok "Renamed local master to main to follow GitHub"
+        }
+    }
 
     # Fast-forward first. Only fall back to a destructive reset if the user
     # explicitly asks for it -- reset --hard + clean -ffd silently discards
