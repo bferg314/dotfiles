@@ -6,16 +6,16 @@ and "The toolchain" sections before making structural changes.
 
 ## Workflow: always on a new branch
 
-1. **Before changing anything, create a new branch from an up-to-date `master`.** Never commit to
-   `master` directly, even for a one-line fix.
+1. **Before changing anything, create a new branch from an up-to-date `main`.** Never commit to
+   `main` directly, even for a one-line fix.
    ```sh
-   git switch master && git pull --ff-only
+   git switch main && git pull --ff-only
    git switch -c claude/<short-kebab-topic>      # e.g. claude/add-gup-folgit
    ```
 2. Do the work on that branch, and commit with the conventions below.
 3. **Stop there.** Do not push, open a pull request or merge on your own initiative. The owner
    reviews the work, asks for a PR when it looks right, and merges it themselves.
-4. When asked for a PR: push the branch and open it against `master` with `gh pr create`. Describe
+4. When asked for a PR: push the branch and open it against `main` with `gh pr create`. Describe
    what changed, why, and how it was tested, including what could *not* be tested (a platform
    you could not run, an installer you did not execute).
 

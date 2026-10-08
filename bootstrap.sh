@@ -4,8 +4,8 @@
 # generates an SSH key for GitHub, and sets up authorized_keys.
 #
 # Usage:
-#   bash <(wget -qO- https://raw.githubusercontent.com/USER/dotfiles/master/bootstrap.sh)
-#   bash <(curl -fsSL https://raw.githubusercontent.com/USER/dotfiles/master/bootstrap.sh)
+#   bash <(wget -qO- https://raw.githubusercontent.com/USER/dotfiles/main/bootstrap.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/USER/dotfiles/main/bootstrap.sh)
 
 DOTFILES_DIR="$HOME/dotfiles"
 IS_ROOT=false
@@ -263,7 +263,7 @@ create_user_prompt() {
     echo
     echo -e "${YELLOW}  Log out and log back in as '${BOLD}${new_user}${NC}${YELLOW}', then re-run this bootstrap:${NC}"
     echo
-    echo -e "  ${BOLD}bash <(curl -fsSL https://raw.githubusercontent.com/<user>/dotfiles/master/bootstrap.sh)${NC}"
+    echo -e "  ${BOLD}bash <(curl -fsSL https://raw.githubusercontent.com/<user>/dotfiles/main/bootstrap.sh)${NC}"
     echo
     echo -e "  ${BLUE}Or if the script is already on disk:${NC}"
     echo -e "  ${BOLD}bash /path/to/bootstrap.sh${NC}"

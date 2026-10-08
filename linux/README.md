@@ -40,7 +40,7 @@ already true, so re-running is informed rather than guesswork.
 
 ```
   Dotfiles Setup
-  arch · x86_64 · branch master
+  arch · x86_64 · branch main
 
   PRESETS
     [ ] Workstation preset
@@ -58,7 +58,7 @@ already true, so re-running is informed rather than guesswork.
     [ ] Network discovery (mDNS)   · avahi not running
 
   MAINTAIN
-    [ ] Update from git            ✓ up to date with origin/master
+    [ ] Update from git            ✓ up to date with origin/main
     [ ] Doctor (full report)
 ```
 

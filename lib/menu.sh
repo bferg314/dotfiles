@@ -637,7 +637,19 @@ menu_update_repo() {
     branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" ||
         { warn "$REPO_ROOT is not a git repository"; return 1; }
 
-    git -C "$REPO_ROOT" fetch origin || warn "fetch failed; working from what is already local"
+    git -C "$REPO_ROOT" fetch --prune origin || warn "fetch failed; working from what is already local"
+
+    # GitHub's master became main in October 2026. Clones made before that
+    # still have a local master whose origin/master is gone: follow the rename.
+    if [ "$branch" = "master" ] &&
+        ! git -C "$REPO_ROOT" rev-parse -q --verify refs/remotes/origin/master >/dev/null &&
+        git -C "$REPO_ROOT" rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+        git -C "$REPO_ROOT" branch -m master main &&
+            git -C "$REPO_ROOT" branch -u origin/main main >/dev/null &&
+            git -C "$REPO_ROOT" remote set-head origin main &&
+            branch=main &&
+            ok "Renamed local master to main to follow GitHub"
+    fi
 
     if git -C "$REPO_ROOT" pull --ff-only origin "$branch"; then
         ok "Updated to latest origin/$branch"
