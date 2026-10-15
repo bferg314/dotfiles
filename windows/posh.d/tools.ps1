@@ -55,11 +55,14 @@ function Get-CachedInitScript {
 # project's mise.toml, because each one resolves the version for the current
 # directory when it runs.
 #
-# Prepended rather than appended, so mise's node/python/go win over any
-# winget-installed copies still on the machine PATH from before mise.
+# Moved to the front, so mise's node/python/go win over any winget-installed
+# copies still on the machine PATH from before mise. Moved, not just added when
+# missing: mise's installer already puts the shims on the user PATH, and
+# Windows builds a process PATH as machine-then-user, so a winget Node.js or Go
+# in Program Files would otherwise still come first.
 $miseShims = Join-Path $env:LOCALAPPDATA 'mise\shims'
-if ((Test-Path -LiteralPath $miseShims) -and ($env:Path -split ';' -notcontains $miseShims)) {
-    $env:Path = "$miseShims;$env:Path"
+if (Test-Path -LiteralPath $miseShims) {
+    $env:Path = (@($miseShims) + @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $miseShims })) -join ';'
 }
 Remove-Variable miseShims
 
