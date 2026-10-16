@@ -16,6 +16,11 @@
 
 $script:MenuTasks = @()
 
+# One line under the header. setup.ps1's startup update check runs before the
+# first redraw clears the screen, so what it found is carried here rather than
+# printed and lost.
+$script:MenuNotice = ''
+
 function Add-MenuTask {
     param(
         [Parameter(Mandatory)][string]$Id,
@@ -183,6 +188,7 @@ function Show-MenuHeader {
     Write-Host ""
     Write-Host "  $script:MenuTitle" -ForegroundColor Cyan
     Write-Host "  $line" -ForegroundColor Blue
+    if ($script:MenuNotice) { Write-Host "  $script:MenuNotice" -ForegroundColor Yellow }
     Write-Host ""
 }
 
@@ -545,7 +551,11 @@ function Test-MenuTable {
     return ($problems -eq 0)
 }
 
+# -AfterBatch runs once you are back from a batch, before the next redraw.
+# setup.ps1 uses it to restart on new code when Update from git moved HEAD.
 function Invoke-Menu {
+    param([scriptblock]$AfterBatch)
+
     if (-not (Test-MenuTable)) {
         Invoke-Die "Task table is inconsistent (see above)"
     }
@@ -577,6 +587,7 @@ function Invoke-Menu {
 
         Clear-MenuSelection
         if (-not (Wait-MenuEnter 'Press Enter to return to the menu...')) { break }
+        if ($AfterBatch) { & $AfterBatch }
     }
 
     Write-Host ""

@@ -147,6 +147,15 @@ preflight checks are all derived from it. Linux and macOS share one engine in `l
 
 Once the links are in place, `dotsetup` reopens the menu from anywhere on all three platforms.
 
+The menu keeps itself current. Each time it starts, it fetches `origin` and, if your branch is
+behind, fast-forwards and restarts on the new code; the header then says what arrived (`updated
+from 1a2b3c4 · 3 new commit(s)`). It only ever fast-forwards, which git refuses when it would
+overwrite a file you have modified, so this cannot lose work. When it cannot apply the update
+(local commits, a conflicting edit) or cannot reach `origin`, it says so in the header and runs
+the local copy; **Update from git** shows what is in the way. Running that task restarts the
+menu too once it has moved the checkout. To skip the check, pass `--no-update` (`-NoUpdate` on
+Windows) or set `DOTFILES_NO_UPDATE=1`.
+
 ## Repository layout
 
 ```
@@ -258,9 +267,9 @@ Every push runs [CI](.github/workflows/ci.yml):
 
 | Job | What it checks |
 |---|---|
-| lint | shellcheck on every shell file; bash 3.2 syntax for everything macOS runs |
+| lint | shellcheck on every shell file; bash 3.2 syntax for everything macOS runs; the menu's self-update under bash 3.2 |
 | linux | On Debian 13, Ubuntu 24.04, Fedora 43 and Arch: Link dotfiles, install the whole mise toolchain, then start an interactive bash and check it loads with no errors and every tool and key binding is live |
-| macos | The same with zsh and Homebrew, plus a Brewfile parse |
+| macos | The same with zsh and Homebrew, plus a Brewfile parse and the menu's self-update under the system bash |
 | windows | The PowerShell test suites under 5.1 and 7, and PSScriptAnalyzer (errors fail the build) |
 | editor | vim and Neovim install every plugin and start with no errors |
 
@@ -276,6 +285,10 @@ docker run --rm -t -v "$PWD:/repo:ro" debian:13 bash -c \
 docker run --rm -t -v "$PWD:/repo:ro" debian:13 bash -c \
     'apt-get update -qq && apt-get install -y -qq git curl ca-certificates vim neovim >/dev/null &&
      /repo/tests/vim-smoke.sh'
+
+# The menu's self-update (fetch, fast-forward, restart), under the bash 3.2 macOS runs it with
+docker run --rm -v "$PWD:/repo:ro" bash:3.2 sh -c \
+    'apk add --no-cache -q git >/dev/null && bash /repo/tests/self-update.sh'
 
 # shellcheck
 shellcheck -S warning -x $(git ls-files '*.sh' '*.bashrc' '*.zshrc' | grep -v vendor/)
