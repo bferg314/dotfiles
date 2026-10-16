@@ -13,8 +13,13 @@
 #   * Rust stays on rustup, which mise itself recommends.
 #
 # A project can override any of these with its own mise.toml (`mise use
-# node@22` in the project directory writes one). After editing this file run
-# `mise install`, or `mise upgrade` to move "latest"/"lts" entries forward.
+# node@22` in the project directory writes one).
+#
+# mise.lock beside this file records the exact version "latest" and "lts"
+# resolved to, with download checksums for each platform, so every machine
+# installs the same versions. `mise install` installs what the lockfile says;
+# `mise upgrade` moves tools forward and rewrites the lockfile, which is then
+# committed like any other change. See "Updating mise tools" in readme.md.
 
 [tools]
 # Runtimes

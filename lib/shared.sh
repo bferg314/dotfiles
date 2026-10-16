@@ -123,6 +123,10 @@ dot_link_shared() {
     dot_link "$shared/zellij/config.kdl" "$HOME/.config/zellij/config.kdl"
     dot_link "$shared/starship/tokyo.toml" "$HOME/.config/starship.toml"
     dot_link "$shared/mise/config.toml" "$HOME/.config/mise/config.toml"
+    # mise reads the global lockfile from beside the config's link, not from
+    # beside its target, so it needs a link of its own. mise writes through the
+    # link on `mise upgrade`, which leaves the change in this repo to commit.
+    dot_link "$shared/mise/mise.lock" "$HOME/.config/mise/mise.lock"
     dot_link "$shared/git/ignore" "$HOME/.config/git/ignore"
 
     dot_git_include "$shared/git/gitconfig"
@@ -153,7 +157,8 @@ dot_shared_missing() {
         "vim/.vimrc:$HOME/.vimrc" \
         "zellij/config.kdl:$HOME/.config/zellij/config.kdl" \
         "starship/tokyo.toml:$HOME/.config/starship.toml" \
-        "mise/config.toml:$HOME/.config/mise/config.toml"; do
+        "mise/config.toml:$HOME/.config/mise/config.toml" \
+        "mise/mise.lock:$HOME/.config/mise/mise.lock"; do
         src="$REPO_ROOT/shared/${pair%%:*}"
         dst="${pair#*:}"
         [ "$(readlink "$dst" 2>/dev/null)" = "$src" ] || missing="${missing:+$missing, }$(basename "$dst")"
@@ -208,8 +213,10 @@ mise_install_tools() {
     "$mise" trust --quiet "$HOME/.config/mise/config.toml" >/dev/null 2>&1 || true
 
     step "Installing mise tools (node, python, go, uv, ruff...)"
+    # Install only. shared/mise/mise.lock decides the versions, so every
+    # machine gets the same ones; `mise upgrade` would move this machine past
+    # the lockfile and leave a change in the repo nobody asked for.
     "$mise" install --yes || { warn "Some mise tools failed to install; re-run 'mise install' to retry"; return 1; }
-    "$mise" upgrade --yes >/dev/null 2>&1 || true
     ok "mise tools installed"
     "$mise" ls --current 2>/dev/null | sed 's/^/    /'
 
@@ -225,6 +232,43 @@ mise_install_tools() {
         fi
     fi
     return 0
+}
+
+# mise activate (shared/shell/tools.sh) only runs in interactive shells, so a
+# login shell started to run a command -- `bash -lc`, an IDE's remote server,
+# some ssh setups -- saw the distro's python3 and no node, uv or go at all.
+# This block gives those shells mise's shims instead. Interactive shells skip
+# it and keep `mise activate`, whose per-directory versions come first. The
+# shims are links to the mise binary itself, so they work without
+# ~/.local/bin on PATH.
+DOT_SHIMS_MARKER='# mise shims for login shells that are not interactive (dotfiles)'
+
+# Append the shims block to a login profile (~/.profile, ~/.bash_profile,
+# ~/.zprofile), once.
+dot_profile_shims() {
+    local profile="$1"
+    if grep -qF "$DOT_SHIMS_MARKER" "$profile" 2>/dev/null; then
+        ok "$(basename "$profile") already puts mise's shims on PATH"
+        return 0
+    fi
+    # shellcheck disable=SC2016  # written literally into the profile
+    printf '\n%s\n%s\n' "$DOT_SHIMS_MARKER" 'case $- in
+    *i*) ;;
+    *)
+        _dot_shims="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
+        case ":$PATH:" in
+            *":$_dot_shims:"*) ;;
+            *) [ -d "$_dot_shims" ] && PATH="$_dot_shims:$PATH" && export PATH ;;
+        esac
+        unset _dot_shims
+        ;;
+esac' >> "$profile"
+    ok "Added mise's shims to $(basename "$profile") for non-interactive login shells"
+}
+
+# True when the profile already has the shims block.
+dot_profile_has_shims() {
+    grep -qF "$DOT_SHIMS_MARKER" "$1" 2>/dev/null
 }
 
 # ─── Go tools (gup) ───────────────────────────────────────────────────────────

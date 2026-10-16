@@ -76,6 +76,14 @@ else
     fail "stale link $RCDIR/hist.bashrc survived"
 fi
 
+# mise looks for the global lockfile beside the config's link, so it needs a
+# link of its own or every machine resolves "latest" by itself again.
+if [ "$(readlink "$HOME/.config/mise/mise.lock")" = "$REPO_ROOT/shared/mise/mise.lock" ]; then
+    pass "the mise lockfile is linked beside the config"
+else
+    fail "$HOME/.config/mise/mise.lock is not linked to shared/mise/mise.lock"
+fi
+
 # ─── Toolchain ────────────────────────────────────────────────────────────────
 
 if [ "$WITH_TOOLS" = 1 ]; then
@@ -104,6 +112,15 @@ if [ "$WITH_TOOLS" = 1 ]; then
     fi
     missing="$(go_tools_missing)"
     [ -z "$missing" ] && pass "every Go tool is in $(go_bin_dir)" || fail "Go tools missing: $missing"
+    # Every installed version must be the one in the lockfile: a tool missing
+    # from it, or an install step that upgrades past it, shows up here.
+    unlocked="$(mise ls --current --no-header 2>/dev/null | while read -r tool version _; do
+        awk -v t="[[tools.$tool]]" -v v="version = \"$version\"" \
+            '$0 == t { want = 1; next } want && /^version = / { found = ($0 == v); want = 0 } END { exit !found }' \
+            "$REPO_ROOT/shared/mise/mise.lock" || printf '%s@%s ' "$tool" "$version"
+    done)"
+    [ -z "$unlocked" ] && pass "every installed mise tool is the version in mise.lock" ||
+        fail "installed versions not in shared/mise/mise.lock: $unlocked"
     # delta exists now, so Base tools would add its include; do the same.
     dot_git_delta_include >/dev/null 2>&1
 fi
@@ -172,6 +189,27 @@ fi
 if [ "$WITH_TOOLS" = 1 ]; then
     missing="$(printf '%s\n' "$out" | grep '^MISSING:' | cut -d: -f2 | paste -sd' ' -)"
     [ -z "$missing" ] && pass "every tool and integration is live in the shell" || fail "not live in the shell: $missing"
+fi
+
+# ─── A login shell that is not interactive ────────────────────────────────────
+#
+# What `bash -lc cmd`, an IDE's remote server or a deploy script gets: the
+# login profile but not mise activate. Started from a bare environment so the
+# PATH this script inherited cannot hide a missing entry.
+blocks="$(grep -cF "$DOT_SHIMS_MARKER" "$HOME"/.profile "$HOME"/.bash_profile "$HOME"/.zprofile 2>/dev/null |
+    awk -F: '{ n += $2 } END { print n + 0 }')"
+[ "$blocks" = 1 ] && pass "the login-shell shims block is added exactly once" || fail "shims block appears $blocks times"
+if [ "$WITH_TOOLS" = 1 ]; then
+    node_path="$(env -i HOME="$HOME" PATH=/usr/bin:/bin "$SHELL_BIN" -l -c 'command -v node' 2>/dev/null)"
+    case "$node_path" in
+        */mise/shims/node) pass "a non-interactive login $SHELL_BIN finds node through mise's shims" ;;
+        *) fail "a non-interactive login $SHELL_BIN does not get mise's node" "got: ${node_path:-nothing}" ;;
+    esac
+    if env -i HOME="$HOME" PATH=/usr/bin:/bin "$SHELL_BIN" -l -c 'node --version' >/dev/null 2>&1; then
+        pass "node runs through the shim"
+    else
+        fail "node's shim is on PATH but does not run"
+    fi
 fi
 
 # ─── Done ─────────────────────────────────────────────────────────────────────

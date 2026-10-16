@@ -46,6 +46,10 @@ status_links() {
         printf 'linked, but ~/.bashrc does not source them'
         return 1
     fi
+    if ! dot_profile_has_shims "$(_login_profile)"; then
+        printf 'linked, but login shells lack mise - re-run'
+        return 1
+    fi
     missing="$(dot_shared_missing)"
     if [ -n "$missing" ]; then
         printf 'not linked: %s' "$missing"
@@ -156,9 +160,20 @@ task_links() {
 
     _link_rc "$HOME/.bashrc" ""
     [ -f "$HOME/.zshrc" ] && _link_rc "$HOME/.zshrc" " (shared with bash)"
+    dot_profile_shims "$(_login_profile)"
 
     ok "Links created and shell configured"
     info "Run '. ~/.bashrc' to apply changes to your current session."
+}
+
+# The file a bash login shell reads: the first of these that exists. Fedora
+# and Arch ship ~/.bash_profile, which leaves ~/.profile unread there.
+_login_profile() {
+    local f
+    for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+        [ -f "$f" ] && { printf '%s' "$f"; return 0; }
+    done
+    printf '%s' "$HOME/.profile"
 }
 
 # Append the bashrc.d sourcing block to an rc file, once.

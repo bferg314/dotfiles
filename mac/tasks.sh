@@ -48,6 +48,10 @@ status_links() {
         printf 'linked, but ~/.zshrc does not source them'
         return 1
     fi
+    if ! dot_profile_has_shims "$HOME/.zprofile"; then
+        printf 'linked, but login shells lack mise - re-run'
+        return 1
+    fi
     missing="$(dot_shared_missing)"
     if [ -n "$missing" ]; then
         printf 'not linked: %s' "$missing"
@@ -160,6 +164,7 @@ task_links() {
 
     _link_rc "$HOME/.zshrc" ""
     [ -f "$HOME/.bashrc" ] && _link_rc "$HOME/.bashrc" " (shared with zsh)"
+    dot_profile_shims "$HOME/.zprofile"
 
     ok "Links created and shell configured"
     info "Run '. ~/.zshrc' to apply changes to your current session."

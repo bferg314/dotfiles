@@ -185,6 +185,7 @@ function Get-SharedLinks {
         @{ Source = "$shared\vim\.vimrc";          Target = "$HOME\_vimrc" }
         @{ Source = "$shared\starship\tokyo.toml"; Target = "$HOME\.config\starship.toml" }
         @{ Source = "$shared\mise\config.toml";    Target = "$HOME\.config\mise\config.toml" }
+        @{ Source = "$shared\mise\mise.lock";      Target = "$HOME\.config\mise\mise.lock" }
     )
 }
 

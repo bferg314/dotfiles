@@ -25,7 +25,7 @@ rather than guesswork.
 
 | Task | What it does |
 |---|---|
-| Link dotfiles | Symlinks the shell snippets (`shared/shell/*.sh` and `mac/zshrc.d/*`) into `~/.zshrc.d/`, and the shared configs to their usual places (see [Configuration files](#configuration-files)). Adds `shared/git/gitconfig` to `~/.gitconfig` as an `[include]`, plus delta's pager settings once delta is installed. Appends a `~/.zshrc.d` sourcing block to `~/.zshrc` (and `~/.bashrc` if present). A real file already at a link's location is moved to `<name>.bak-<timestamp>` first; links left behind by files that moved in the repo are removed |
+| Link dotfiles | Symlinks the shell snippets (`shared/shell/*.sh` and `mac/zshrc.d/*`) into `~/.zshrc.d/`, and the shared configs to their usual places (see [Configuration files](#configuration-files)). Adds `shared/git/gitconfig` to `~/.gitconfig` as an `[include]`, plus delta's pager settings once delta is installed. Appends a `~/.zshrc.d` sourcing block to `~/.zshrc` (and `~/.bashrc` if present), and a block to `~/.zprofile` that puts mise's shims on PATH for non-interactive login shells. A real file already at a link's location is moved to `<name>.bak-<timestamp>` first; links left behind by files that moved in the repo are removed |
 | Shell (zsh) | Installs zsh if missing, then offers oh-my-zsh and making zsh the default shell |
 | Editor plugins | Downloads `plug.vim` for vim and Neovim |
 | Base tools | Runs `installs/base.sh` — see [What Base tools installs](#what-base-tools-installs) |
@@ -98,6 +98,7 @@ and adds delta as git's pager.
 | `shared/zellij/config.kdl` | `~/.config/zellij/config.kdl` |
 | `shared/starship/tokyo.toml` | `~/.config/starship.toml` |
 | `shared/mise/config.toml` | `~/.config/mise/config.toml` |
+| `shared/mise/mise.lock` | `~/.config/mise/mise.lock` |
 | `shared/git/ignore` | `~/.config/git/ignore` |
 | `shared/git/gitconfig` | `[include]`d from `~/.gitconfig` |
 | `shared/git/delta.gitconfig` | `[include]`d from `~/.gitconfig`, once delta is installed |
