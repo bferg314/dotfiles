@@ -22,4 +22,6 @@ export SCRIPT_DIR REPO_ROOT
 . "$SCRIPT_DIR/tasks.sh"
 
 MENU_TITLE="Dotfiles Setup"
-menu_main
+# What the menu re-runs after updating itself.
+MENU_SCRIPT="$SCRIPT_DIR/setup.sh"
+menu_main "$@"

@@ -4,6 +4,10 @@
 # The counterpart to linux/setup.sh -- same menu shape, same guarantees:
 # everything is idempotent and the update option will not discard your work
 # without asking.
+#
+#   -NoUpdate   skip the update check on start (also: $env:DOTFILES_NO_UPDATE=1)
+
+param([switch]$NoUpdate)
 
 # $PSScriptRoot is set correctly even when this file is dot-sourced, unlike
 # $MyInvocation.MyCommand.Path, which is empty in that case and used to bake an
@@ -630,6 +634,122 @@ function Get-TailscaleStatus {
     return New-MenuStatus -State todo -Detail 'installed, not connected'
 }
 
+# ─── Self-update (runs once, before the first redraw) ─────────────────────────
+#
+# The same behaviour as menu_self_update in lib/menu.sh: fetch on start and,
+# when origin has moved on, fast-forward and restart so every run uses the
+# latest tasks. Only a fast-forward is ever attempted here: git refuses one that
+# would overwrite a modified file, so this path cannot lose work. Anything
+# harder (local commits, a diverged branch) is left to Update from git.
+
+# A fetch that cannot hang the menu. Neither git nor Git Credential Manager may
+# prompt, a stalled transfer is abandoned by git's low-speed limit, and the
+# whole thing is killed after 30 seconds, because nothing in git bounds the
+# connect itself. Start-Process rather than a plain call, for the timeout.
+function Invoke-QuietFetch {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return $false }
+    $saved = @{}
+    foreach ($name in 'GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE') {
+        $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+    }
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $env:GCM_INTERACTIVE = 'never'
+    $out = [System.IO.Path]::GetTempFileName()
+    $err = [System.IO.Path]::GetTempFileName()
+    try {
+        $gitArgs = @('-C', "`"$REPO_ROOT`"", '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=10')
+        # Through config rather than GIT_SSH_COMMAND, so one you set still wins.
+        if (-not (git -C $REPO_ROOT config core.sshCommand 2>$null)) {
+            $gitArgs += @('-c', '"core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=10"')
+        }
+        $gitArgs += @('fetch', '--quiet', '--prune', 'origin')
+        # Start-Process joins these with spaces and quotes nothing, hence the
+        # embedded quotes around the path and the ssh command.
+        $p = Start-Process -FilePath git -ArgumentList $gitArgs -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err -ErrorAction Stop
+        # Touching Handle keeps ExitCode readable after the process exits
+        # (otherwise it can come back empty under Windows PowerShell 5.1).
+        $null = $p.Handle
+        if (-not $p.WaitForExit(30000)) {
+            try { $p.Kill() } catch { }
+            return $false
+        }
+        return ($p.ExitCode -eq 0)
+    } catch {
+        return $false
+    } finally {
+        foreach ($name in $saved.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process')
+        }
+        Remove-Item $out, $err -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Run setup.ps1 again in a new process of the same edition (5.1 stays 5.1, 7
+# stays 7, so PSModulePath is already right for it), then end this one with its
+# exit code. There is no exec here; Start-Process -NoNewWindow -Wait hands the
+# child this console, which a plain `& $exe` would not do for gum's picker.
+function Restart-DotfilesSetup {
+    param([Parameter(Mandatory)][string]$From)
+
+    Write-Host "Restarting on the new version..." -ForegroundColor Green
+    $env:DOTFILES_UPDATED = $From
+    $exe = (Get-Process -Id $PID).Path
+    $setupPath = Join-Path $SCRIPT_DIR 'setup.ps1'
+    $p = Start-Process -FilePath $exe -NoNewWindow -Wait -PassThru `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$setupPath`"")
+    exit $p.ExitCode
+}
+
+function Invoke-SelfUpdate {
+    param([switch]$Skip)
+
+    # Set by Restart-DotfilesSetup to where the last process started from:
+    # report what arrived, and do not check again (a bad pull must not loop).
+    if ($env:DOTFILES_UPDATED) {
+        $before = $env:DOTFILES_UPDATED
+        Remove-Item Env:DOTFILES_UPDATED
+        $count = git -C $REPO_ROOT rev-list --count "$before..HEAD" 2>$null
+        if (-not $count) { $count = '?' }
+        $short = $before.Substring(0, [Math]::Min(7, $before.Length))
+        $script:MenuNotice = "updated from $short · $count new commit(s)"
+        return
+    }
+
+    if ($Skip -or $env:DOTFILES_NO_UPDATE) { return }
+
+    $branch = git -C $REPO_ROOT rev-parse --abbrev-ref HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { return }
+    if (-not $branch -or $branch -eq 'HEAD') {
+        $script:MenuNotice = 'detached HEAD - not checking for updates'
+        return
+    }
+
+    Write-Host "Checking for updates..." -ForegroundColor Blue
+    if (-not (Invoke-QuietFetch)) {
+        $script:MenuNotice = 'could not reach origin - running the local version'
+        return
+    }
+
+    # No origin/<branch>: a local-only branch, or a master that GitHub renamed
+    # (Update from git follows that rename).
+    $behind = git -C $REPO_ROOT rev-list --count "HEAD..origin/$branch" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $behind) {
+        $script:MenuNotice = "no origin/$branch to update from - see Update from git"
+        return
+    }
+    if ($behind -eq '0') { return }
+
+    Write-Host "$behind new commit(s) on origin/${branch}:" -ForegroundColor Cyan
+    git -C $REPO_ROOT log --oneline --no-decorate -n 10 "HEAD..origin/$branch" |
+        ForEach-Object { Write-Host "  $_" }
+
+    $before = git -C $REPO_ROOT rev-parse HEAD
+    git -C $REPO_ROOT merge --ff-only --quiet "origin/$branch" *> $null
+    if ($LASTEXITCODE -eq 0) { Restart-DotfilesSetup -From $before }
+    $script:MenuNotice = "$behind update(s) not applied (local changes in the way) - see Update from git"
+}
+
 function Get-UpdateStatus {
     $branch = git -C $REPO_ROOT rev-parse --abbrev-ref HEAD 2>$null
     if ($LASTEXITCODE -ne 0) { return New-MenuStatus -State unknown -Detail 'not a git repository' }
@@ -771,4 +891,12 @@ Add-MenuTask -Id 'doctor'  -Label 'Doctor (full report)' -Group maintain  -Order
 
 # ─── Go ───────────────────────────────────────────────────────────────────────
 
-Invoke-Menu
+Invoke-SelfUpdate -Skip:$NoUpdate
+
+# Update from git (or its hard reset) moves HEAD under a process still running
+# the code it loaded at launch. Start again on the new one.
+$startHead = git -C $REPO_ROOT rev-parse HEAD 2>$null
+Invoke-Menu -AfterBatch {
+    $now = git -C $REPO_ROOT rev-parse HEAD 2>$null
+    if ($startHead -and $now -ne $startHead) { Restart-DotfilesSetup -From $startHead }
+}

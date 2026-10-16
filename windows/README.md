@@ -150,7 +150,7 @@ guesswork.
 | Desktop apps | GUI applications — **needs Administrator** |
 | Server tools (SSH) | OpenSSH server, PowerShell 7 as the SSH shell, optional key-only hardening — **needs Administrator** |
 | Tailscale (VPN) | Installs the Tailscale client — **needs Administrator**. It does not log in; run `tailscale up` yourself |
-| Update from git | Fast-forwards the repo; a destructive reset requires typing `yes` |
+| Update from git | Fast-forwards the repo; a destructive reset requires typing `yes`. Restarts the menu afterwards if the checkout moved. The menu also fast-forwards by itself when it starts (skip with `-NoUpdate` or `$env:DOTFILES_NO_UPDATE=1`); see [the top-level readme](../readme.md#the-setup-menu) |
 | Doctor (full report) | Prints every check in full, plus git identity, symlink capability, winget version, the versions mise has active, whether mise's shims are on PATH, whether the Go tools from `shared/gup/gup.json` are installed, whether the shared git config is included, and any winget Python / Node.js / Go still installed from before mise. Read-only |
 
 The two presets at the top are shortcuts: ticking one replaces it with the tasks it stands

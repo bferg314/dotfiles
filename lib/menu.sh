@@ -227,6 +227,9 @@ menu_header() {
     printf '\n'
     printf '%b\n' "${BOLD}${CYAN}  $MENU_TITLE${NC}"
     printf '%b\n' "${BLUE}  $(menu_platform_line)${branch:+ · branch $branch}${NC}"
+    # The startup update check runs before the first redraw clears the screen,
+    # so what it found is carried here rather than printed and lost.
+    [ -n "$MENU_NOTICE" ] && printf '%b\n' "${YELLOW}  $MENU_NOTICE${NC}"
     printf '\n'
 }
 
@@ -598,6 +601,10 @@ menu_selftest() {
 menu_main() {
     menu_selftest || die "Task table is inconsistent (see above)"
 
+    menu_self_update "$@"
+    local start_head
+    start_head="$(menu_repo_head)"
+
     while true; do
         menu_probe_all
         [ "$MENU_SELECTED" = " " ] && menu_select_defaults
@@ -620,6 +627,12 @@ menu_main() {
 
         menu_clear_selection
         menu_pause "Press Enter to return to the menu..." || break
+
+        # Update from git (or its hard reset) moved HEAD, but this process is
+        # still running the code it loaded at launch. Start again on the new one.
+        if [ -n "$start_head" ] && [ "$(menu_repo_head)" != "$start_head" ]; then
+            menu_restart "$start_head" "$@"
+        fi
     done
 
     printf '\n'
@@ -672,6 +685,98 @@ menu_update_repo() {
     else
         info "Aborted. Repository left untouched."
     fi
+}
+
+# ─── Self-update (runs once, before the first redraw) ─────────────────────────
+#
+# The menu fetches on start and, when origin has moved on, fast-forwards and
+# restarts itself so every run uses the latest tasks. Only a fast-forward is
+# ever attempted here: git refuses one that would overwrite a modified file, so
+# this path cannot lose work. Anything harder (local commits, a diverged branch)
+# is left to the Update from git task, which can show what is in the way.
+#
+# Skipped with --no-update or DOTFILES_NO_UPDATE=1 (offline machines, or
+# working on the menu itself). The caller sets MENU_SCRIPT to its own path so
+# the restart knows what to run.
+
+MENU_NOTICE=""
+
+menu_repo_head() { git -C "$REPO_ROOT" rev-parse -q --verify HEAD 2>/dev/null; }
+
+# A fetch that cannot hang the menu. GIT_TERMINAL_PROMPT stops a credential
+# prompt; BatchMode does the same for ssh. The low-speed limit abandons a
+# stalled transfer, but nothing in git bounds the connect itself, so `timeout`
+# wraps it where coreutils provides one (macOS has none; there a dead network
+# costs the OS connect timeout once).
+_menu_fetch_quietly() {
+    local limit=""
+    command -v timeout >/dev/null 2>&1 && limit="timeout 30"
+    set -- -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10
+    # Through config rather than GIT_SSH_COMMAND, so a GIT_SSH_COMMAND or
+    # core.sshCommand you set (a key, a jump host) still wins.
+    if [ -z "$(git -C "$REPO_ROOT" config core.sshCommand 2>/dev/null)" ]; then
+        set -- "$@" -c "core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=10"
+    fi
+    # shellcheck disable=SC2086  # $limit is either empty or two words
+    GIT_TERMINAL_PROMPT=0 $limit git -C "$REPO_ROOT" "$@" fetch --quiet --prune origin >/dev/null 2>&1
+}
+
+menu_self_update() {
+    local arg branch behind incoming before
+
+    # Set by menu_restart to where this process started from: report what
+    # arrived, and do not check again (a bad pull must not loop).
+    if [ -n "${DOTFILES_UPDATED:-}" ]; then
+        before="$DOTFILES_UPDATED"
+        unset DOTFILES_UPDATED
+        incoming="$(git -C "$REPO_ROOT" rev-list --count "$before..HEAD" 2>/dev/null)"
+        MENU_NOTICE="updated from ${before%"${before#???????}"} · ${incoming:-?} new commit(s)"
+        return 0
+    fi
+
+    [ -z "${DOTFILES_NO_UPDATE:-}" ] || return 0
+    for arg in "$@"; do
+        [ "$arg" != "--no-update" ] || return 0
+    done
+
+    branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 0
+    if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+        MENU_NOTICE="detached HEAD - not checking for updates"
+        return 0
+    fi
+
+    printf '%b\n' "${BLUE}Checking for updates...${NC}"
+    if ! _menu_fetch_quietly; then
+        MENU_NOTICE="could not reach origin - running the local version"
+        return 0
+    fi
+
+    # No origin/<branch>: a local-only branch, or a master that GitHub renamed
+    # (Update from git follows that rename).
+    behind="$(git -C "$REPO_ROOT" rev-list --count "HEAD..origin/$branch" 2>/dev/null)" || {
+        MENU_NOTICE="no origin/$branch to update from - see Update from git"
+        return 0
+    }
+    [ "$behind" != "0" ] || return 0
+
+    printf '%b\n' "${CYAN}$behind new commit(s) on origin/$branch:${NC}"
+    git -C "$REPO_ROOT" log --oneline --no-decorate -n 10 "HEAD..origin/$branch" | sed 's/^/  /'
+
+    before="$(menu_repo_head)"
+    if git -C "$REPO_ROOT" merge --ff-only --quiet "origin/$branch" >/dev/null 2>&1; then
+        menu_restart "$before" "$@"
+    fi
+    MENU_NOTICE="$behind update(s) not applied (local changes in the way) - see Update from git"
+}
+
+# Replace this process with a fresh run of the menu. exec, so quitting the new
+# menu returns straight to the shell rather than to this one. $BASH keeps the
+# same interpreter (the system bash 3.2 on macOS).
+menu_restart() {
+    local before="$1"
+    shift
+    printf '%b\n' "${GREEN}Restarting on the new version...${NC}"
+    DOTFILES_UPDATED="$before" exec "${BASH:-bash}" "$MENU_SCRIPT" "$@"
 }
 
 # Behind/ahead counts for the status column.

@@ -71,7 +71,7 @@ already true, so re-running is informed rather than guesswork.
 | Server tools (SSH) | Runs `installs/server.sh` |
 | Tailscale (VPN) | Runs `installs/tailscale.sh` — installs the client and enables `tailscaled`. It does not log in; run `sudo tailscale up` yourself |
 | Network discovery (mDNS) | Runs `installs/avahi.sh` |
-| Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset |
+| Update from git | `git pull --ff-only`; if that fails, shows what would be lost and requires typing `yes` before doing a hard reset. Restarts the menu afterwards if the checkout moved. The menu also fast-forwards by itself when it starts; see [the top-level readme](../readme.md#the-setup-menu) |
 | Doctor (full report) | Prints every check in full, plus git identity, detected distro, shell config, the versions mise has active, whether the Go tools from `shared/gup/gup.json` are installed, whether the shared git config is included, and leftovers from the old toolchain (`~/.nvm`, nvm lines in your rc files, `/usr/local/go`) with the command that removes each. Read-only |
 
 The two presets are shortcuts: ticking one replaces it with the tasks it stands for, so
