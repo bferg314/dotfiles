@@ -191,6 +191,27 @@ if [ "$WITH_TOOLS" = 1 ]; then
     [ -z "$missing" ] && pass "every tool and integration is live in the shell" || fail "not live in the shell: $missing"
 fi
 
+# ─── A login shell that is not interactive ────────────────────────────────────
+#
+# What `bash -lc cmd`, an IDE's remote server or a deploy script gets: the
+# login profile but not mise activate. Started from a bare environment so the
+# PATH this script inherited cannot hide a missing entry.
+blocks="$(grep -cF "$DOT_SHIMS_MARKER" "$HOME"/.profile "$HOME"/.bash_profile "$HOME"/.zprofile 2>/dev/null |
+    awk -F: '{ n += $2 } END { print n + 0 }')"
+[ "$blocks" = 1 ] && pass "the login-shell shims block is added exactly once" || fail "shims block appears $blocks times"
+if [ "$WITH_TOOLS" = 1 ]; then
+    node_path="$(env -i HOME="$HOME" PATH=/usr/bin:/bin "$SHELL_BIN" -l -c 'command -v node' 2>/dev/null)"
+    case "$node_path" in
+        */mise/shims/node) pass "a non-interactive login $SHELL_BIN finds node through mise's shims" ;;
+        *) fail "a non-interactive login $SHELL_BIN does not get mise's node" "got: ${node_path:-nothing}" ;;
+    esac
+    if env -i HOME="$HOME" PATH=/usr/bin:/bin "$SHELL_BIN" -l -c 'node --version' >/dev/null 2>&1; then
+        pass "node runs through the shim"
+    else
+        fail "node's shim is on PATH but does not run"
+    fi
+fi
+
 # ─── Done ─────────────────────────────────────────────────────────────────────
 
 echo

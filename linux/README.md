@@ -64,7 +64,7 @@ already true, so re-running is informed rather than guesswork.
 
 | Task | What it does |
 |---|---|
-| Link dotfiles | Symlinks the shell snippets (`shared/shell/*.sh` and `linux/bashrc.d/*`) into `~/.bashrc.d/`, and the shared configs to their usual places (vim, Neovim, zellij, starship, mise, global gitignore — see [Configuration files](#configuration-files)). Adds `shared/git/gitconfig` to `~/.gitconfig` as an `[include]`, plus delta's pager settings once delta is installed. Appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present). A real file already at a link's location is moved to `<name>.bak-<timestamp>` first; links left behind by files that moved in the repo are removed |
+| Link dotfiles | Symlinks the shell snippets (`shared/shell/*.sh` and `linux/bashrc.d/*`) into `~/.bashrc.d/`, and the shared configs to their usual places (vim, Neovim, zellij, starship, mise, global gitignore — see [Configuration files](#configuration-files)). Adds `shared/git/gitconfig` to `~/.gitconfig` as an `[include]`, plus delta's pager settings once delta is installed. Appends a `~/.bashrc.d` sourcing block to `~/.bashrc` (and `~/.zshrc` if present), and a block that puts mise's shims on PATH for non-interactive login shells to the login profile bash reads (`~/.bash_profile` on Fedora and Arch, `~/.profile` on Debian and Ubuntu). A real file already at a link's location is moved to `<name>.bak-<timestamp>` first; links left behind by files that moved in the repo are removed |
 | Editor plugins | Downloads `plug.vim` into `~/.vim/autoload/` and `~/.local/share/nvim/site/autoload/` |
 | Base tools | Runs `installs/base.sh` |
 | Desktop apps | Runs `installs/desktop.sh` |
@@ -172,7 +172,9 @@ Additional actions:
   plus — on Linux only — starship, zoxide, fzf, eza, bat, delta, lazygit and atuin, which distros
   package late or not at all. These are the same versions on every distro, which replaces the old
   per-distro `python3.14` probing, nvm, and the `/usr/local/go` tarball. `shared/shell/tools.sh`
-  runs `mise activate bash`, which puts them on PATH in every interactive shell. The first run also
+  runs `mise activate bash`, which puts them on PATH in every interactive shell; login shells that
+  only run a command (`bash -lc`, an IDE's remote server) get them through mise's shims instead,
+  from the block Link dotfiles adds to your login profile. The first run also
   imports your existing shell history into atuin.
 - **System Python** — only the distro's own `python3`, for the distro's tools and for scripts that
   expect `/usr/bin/python3`. Development uses mise's Python.

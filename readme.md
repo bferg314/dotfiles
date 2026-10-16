@@ -217,8 +217,9 @@ them, whichever platform it runs on.
 
 mise replaced nvm, the per-platform Python 3.14 packages and the Go tarball/MSI. Because one file
 pins the versions, `python`, `node` and `go` are the same version on every machine, and a project can
-pin its own with a `mise.toml` (`mise use node@22` writes one). On Linux and macOS the shell runs
-`mise activate`; on Windows mise's shims sit at the front of PATH.
+pin its own with a `mise.toml` (`mise use node@22` writes one). On Linux and macOS interactive shells
+run `mise activate`, and login shells that only run a command get mise's shims from the login
+profile; on Windows mise's shims sit at the front of PATH.
 
 **Upgrading from before this toolchain?** Pull, run `dotsetup`, tick *Link dotfiles* and
 *Base tools*, and open a new terminal. Then run *Doctor*: it lists what the old setup left behind
