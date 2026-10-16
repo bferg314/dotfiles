@@ -98,6 +98,7 @@ and adds delta as git's pager.
 | `shared/zellij/config.kdl` | `~/.config/zellij/config.kdl` |
 | `shared/starship/tokyo.toml` | `~/.config/starship.toml` |
 | `shared/mise/config.toml` | `~/.config/mise/config.toml` |
+| `shared/mise/mise.lock` | `~/.config/mise/mise.lock` |
 | `shared/git/ignore` | `~/.config/git/ignore` |
 | `shared/git/gitconfig` | `[include]`d from `~/.gitconfig` |
 | `shared/git/delta.gitconfig` | `[include]`d from `~/.gitconfig`, once delta is installed |

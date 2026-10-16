@@ -18,3 +18,4 @@ gitconfig     text eol=lf
 *.gitconfig   text eol=lf
 Brewfile      text eol=lf
 *.yml         text eol=lf
+*.lock        text eol=lf

@@ -156,6 +156,7 @@ shared/                 configuration used on more than one platform
   vim/.vimrc              the one vimrc, for vim and Neovim on every platform
   nvim/init.vim           Neovim's entry point; sources the vimrc
   mise/config.toml        language runtimes and tooling pinned for every platform
+  mise/mise.lock          the exact versions and checksums those resolve to (mise writes it)
   gup/gup.json            Go tools that only ship as source (folgit), installed by gup
   git/                    gitconfig (included from ~/.gitconfig), delta.gitconfig, global ignore
   zellij/config.kdl       zellij config
@@ -197,6 +198,22 @@ the repo dashboard — and `gup update` keeps everything in `~/go/bin` current a
 not to move `GOBIN` into its per-version directory (`go.set_gobin = false`), so these tools survive Go
 upgrades. folgit's shell integration is loaded automatically, so pressing `g` on a repo in folgit
 leaves your shell in it. See [`shared/gup/README.md`](shared/gup/README.md) to add a tool.
+
+**Updating mise tools.** [`shared/mise/mise.lock`](shared/mise/mise.lock) records the exact
+version each `latest` or `lts` entry resolved to, with a download checksum per platform, and is
+linked beside the config. `mise install` (and `Base tools`) installs those versions and nothing
+newer, so every machine matches. To move forward, on any one machine:
+
+1. `mise outdated` shows what is newer.
+2. `mise upgrade` installs the newer versions and rewrites the lockfile in this repo through its
+   link; `mise upgrade <tool>` moves one tool.
+3. Commit and push `shared/mise/mise.lock`.
+
+Every other machine then runs `Update from git` (or `git pull`) and `mise install`. To undo an
+upgrade, revert the lockfile and run `mise install`. Moving a version range (Python 3.14 to 3.15)
+is still an edit to `config.toml` followed by `mise upgrade <tool>`. The lockfile carries entries
+for linux-x64, linux-arm64, macos-arm64, macos-x64 and windows-x64; `mise upgrade` refreshes all of
+them, whichever platform it runs on.
 
 mise replaced nvm, the per-platform Python 3.14 packages and the Go tarball/MSI. Because one file
 pins the versions, `python`, `node` and `go` are the same version on every machine, and a project can

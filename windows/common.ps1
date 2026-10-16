@@ -664,13 +664,13 @@ function Install-MiseTools {
         Write-Step "Installing mise tools (node, python, go, uv, ruff)..."
         # Start-Process for the same reasons as in Install-Package: mise's
         # progress display redraws in place, and its output stays out of this
-        # function's return value.
+        # function's return value. Install only, never upgrade:
+        # shared/mise/mise.lock decides the versions, as on Linux and macOS.
         $proc = Start-Process -FilePath $mise.Source -ArgumentList 'install --yes' -NoNewWindow -Wait -PassThru
         if ($proc.ExitCode -ne 0) {
             Write-Fail "Some mise tools failed to install; re-run 'mise install' to retry"
             return $false
         }
-        & $mise.Source upgrade --yes *> $null
         & $mise.Source reshim *> $null
         Write-Ok "mise tools installed"
         & $mise.Source ls --current | ForEach-Object { Write-Host "    $_" }

@@ -212,6 +212,7 @@ down with them.
 | `shared/nvim/init.vim` | `%LOCALAPPDATA%\nvim\init.vim` (skipped if you have an `init.lua`) |
 | `shared/starship/tokyo.toml` | `~\.config\starship.toml` |
 | `shared/mise/config.toml` | `~\.config\mise\config.toml` |
+| `shared/mise/mise.lock` | `~\.config\mise\mise.lock` |
 | `shared/git/ignore` | *Written* (not linked) to `~\.config\git\ignore` — see below |
 | `shared/git/gitconfig` | `[include]`d from `~\.gitconfig` |
 | `shared/git/delta.gitconfig` | `[include]`d from `~\.gitconfig`, once delta is installed |
